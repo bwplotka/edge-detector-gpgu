@@ -17,7 +17,7 @@
 
 set( SAMPLE_NAME EdgeDetector )
 set( SOURCE_FILES EdgeDetector.cpp )
-set( EXTRA_FILES SobelFilter_Kernels.cl big.bmp )
+set( EXTRA_FILES SobelFilter_Kernels.cl Input_Image.bmp )
 
 ############################################################################
 

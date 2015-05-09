@@ -28,8 +28,8 @@ using namespace appsdk;
 
 #define SAMPLE_VERSION "AMD-APP-SDK-v2.9-1.599.2"
 
-#define INPUT_IMAGE "big.bmp"
-#define OUTPUT_IMAGE "big_out.bmp"
+#define INPUT_IMAGE "Input_Image.bmp"
+#define OUTPUT_IMAGE "Onput_Image.bmp"
 
 #define GROUP_SIZE 256
 
