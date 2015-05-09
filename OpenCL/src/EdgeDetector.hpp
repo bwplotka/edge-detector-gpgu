@@ -55,7 +55,7 @@ class SobelFilter
 
     public:
 
-        CLCommandArgs   *sampleArgs;   /**< CLCommand argument class */
+		CLContext   *sdkContext;   /**< CLCommand argument class */
 
         /**
         * Read bitmap image and allocate host memory
@@ -81,9 +81,9 @@ class SobelFilter
               verificationOutput(NULL),
               byteRWSupport(true)
         {
-            sampleArgs = new CLCommandArgs();
+            sdkContext = new CLContext();
             sampleTimer = new SDKTimer();
-            sampleArgs->sampleVerStr = SAMPLE_VERSION;
+			sdkContext->sampleVerStr = SAMPLE_VERSION;
             pixelSize = sizeof(uchar4);
             pixelData = NULL;
             blockSizeX = GROUP_SIZE;

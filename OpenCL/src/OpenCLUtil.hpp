@@ -363,239 +363,6 @@ static int validateDeviceId(int deviceId, int deviceCount)
 
 
 /**
- * generateBinaryImage
- * geenrate Binary for a kernel
- * @param binaryData bifdata object
- * @return 0 if success else nonzero
- */
-static int generateBinaryImage(const bifData &binaryData)
-{
-    cl_int status = CL_SUCCESS;
-    /*
-     * Have a look at the available platforms and pick either
-     * the AMD one if available or a reasonable default.
-     */
-    cl_uint numPlatforms;
-    cl_platform_id platform = NULL;
-    status = clGetPlatformIDs(0, NULL, &numPlatforms);
-    CHECK_OPENCL_ERROR(status, "clGetPlatformIDs failed.");
-    if (0 < numPlatforms)
-    {
-        cl_platform_id* platforms = new cl_platform_id[numPlatforms];
-        status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-        CHECK_OPENCL_ERROR(status, "clGetPlatformIDs failed.");
-        char platformName[100];
-        for (unsigned i = 0; i < numPlatforms; ++i)
-        {
-            status = clGetPlatformInfo(
-                         platforms[i],
-                         CL_PLATFORM_VENDOR,
-                         sizeof(platformName),
-                         platformName,
-                         NULL);
-            CHECK_OPENCL_ERROR(status, "clGetPlatformInfo failed.");
-            platform = platforms[i];
-            if (!strcmp(platformName, "Advanced Micro Devices, Inc."))
-            {
-                break;
-            }
-        }
-        std::cout << "Platform found : " << platformName << "\n";
-        delete[] platforms;
-    }
-    if(NULL == platform)
-    {
-        std::cout << "NULL platform found so Exiting Application.";
-        return SDK_FAILURE;
-    }
-    /*
-     * If we could find our platform, use it. Otherwise use just available platform.
-     */
-    cl_context_properties cps[5] =
-    {
-        CL_CONTEXT_PLATFORM,
-        (cl_context_properties)platform,
-        CL_CONTEXT_OFFLINE_DEVICES_AMD,
-        (cl_context_properties)1,
-        0
-    };
-    cl_context context = clCreateContextFromType(
-                             cps,
-                             CL_DEVICE_TYPE_ALL,
-                             NULL,
-                             NULL,
-                             &status);
-    CHECK_OPENCL_ERROR(status, "clCreateContextFromType failed.");
-    /* create a CL program using the kernel source */
-    SDKFile kernelFile;
-    std::string kernelPath = getPath();
-    kernelPath.append(binaryData.kernelName.c_str());
-    if(!kernelFile.open(kernelPath.c_str()))
-    {
-        std::cout << "Failed to load kernel file : " << kernelPath << std::endl;
-        return SDK_FAILURE;
-    }
-    const char * source = kernelFile.source().c_str();
-    size_t sourceSize[] = {strlen(source)};
-    cl_program program = clCreateProgramWithSource(
-                             context,
-                             1,
-                             &source,
-                             sourceSize,
-                             &status);
-    CHECK_OPENCL_ERROR(status, "clCreateProgramWithSource failed.");
-    std::string flagsStr = std::string(binaryData.flagsStr.c_str());
-    // Get additional options
-    if(binaryData.flagsFileName.size() != 0)
-    {
-        SDKFile flagsFile;
-        std::string flagsPath = getPath();
-        flagsPath.append(binaryData.flagsFileName.c_str());
-        if(!flagsFile.open(flagsPath.c_str()))
-        {
-            std::cout << "Failed to load flags file: " << flagsPath << std::endl;
-            return SDK_FAILURE;
-        }
-        flagsFile.replaceNewlineWithSpaces();
-        const char * flags = flagsFile.source().c_str();
-        flagsStr.append(flags);
-    }
-    if(flagsStr.size() != 0)
-    {
-        std::cout << "Build Options are : " << flagsStr.c_str() << std::endl;
-    }
-    /* create a cl program executable for all the devices specified */
-    status = clBuildProgram(
-                 program,
-                 0,
-                 NULL,
-                 flagsStr.c_str(),
-                 NULL,
-                 NULL);
-    /* This function is intentionally left without a error check
-      as it may not pass if kernels rely on specific properties of devices
-      In such cases, binaries for eligible devices are geenrated and dumped
-      even wen this function will return an error */
-    //CHECK_OPENCL_ERROR(status, "clBuildProgram failed.");
-    size_t numDevices;
-    status = clGetProgramInfo(
-                 program,
-                 CL_PROGRAM_NUM_DEVICES,
-                 sizeof(numDevices),
-                 &numDevices,
-                 NULL );
-    CHECK_OPENCL_ERROR(status, "clGetProgramInfo(CL_PROGRAM_NUM_DEVICES) failed.");
-    std::cout << "Number of devices found : " << numDevices << "\n\n";
-    cl_device_id *devices = (cl_device_id *)malloc( sizeof(cl_device_id) *
-                            numDevices );
-    CHECK_ALLOCATION(devices, "Failed to allocate host memory.(devices)");
-    /* grab the handles to all of the devices in the program. */
-    status = clGetProgramInfo(
-                 program,
-                 CL_PROGRAM_DEVICES,
-                 sizeof(cl_device_id) * numDevices,
-                 devices,
-                 NULL );
-    CHECK_OPENCL_ERROR(status, "clGetProgramInfo(CL_PROGRAM_DEVICES) failed.");
-    /* figure out the sizes of each of the binaries. */
-    size_t *binarySizes = (size_t*)malloc( sizeof(size_t) * numDevices );
-    CHECK_ALLOCATION(binarySizes, "Failed to allocate host memory.(binarySizes)");
-    status = clGetProgramInfo(
-                 program,
-                 CL_PROGRAM_BINARY_SIZES,
-                 sizeof(size_t) * numDevices,
-                 binarySizes,
-                 NULL);
-    CHECK_OPENCL_ERROR(status, "clGetProgramInfo(CL_PROGRAM_BINARY_SIZES) failed.");
-    size_t i = 0;
-    /* copy over all of the generated binaries. */
-    char **binaries = (char **)malloc( sizeof(char *) * numDevices );
-    CHECK_ALLOCATION(binaries, "Failed to allocate host memory.(binaries)");
-    for(i = 0; i < numDevices; i++)
-    {
-        if(binarySizes[i] != 0)
-        {
-            binaries[i] = (char *)malloc( sizeof(char) * binarySizes[i]);
-            CHECK_ALLOCATION(binaries[i], "Failed to allocate host memory.(binaries[i])");
-        }
-        else
-        {
-            binaries[i] = NULL;
-        }
-    }
-    status = clGetProgramInfo(
-                 program,
-                 CL_PROGRAM_BINARIES,
-                 sizeof(char *) * numDevices,
-                 binaries,
-                 NULL);
-    CHECK_OPENCL_ERROR(status, "clGetProgramInfo(CL_PROGRAM_BINARIES) failed.");
-    /* dump out each binary into its own separate file. */
-    for(i = 0; i < numDevices; i++)
-    {
-        char fileName[100];
-        sprintf(fileName, "%s.%d", binaryData.binaryName.c_str(), (int)i);
-        char deviceName[1024];
-        status = clGetDeviceInfo(
-                     devices[i],
-                     CL_DEVICE_NAME,
-                     sizeof(deviceName),
-                     deviceName,
-                     NULL);
-        CHECK_OPENCL_ERROR(status, "clGetDeviceInfo(CL_DEVICE_NAME) failed.");
-        if(binarySizes[i] != 0)
-        {
-            printf( "%s binary kernel: %s\n", deviceName, fileName);
-            SDKFile BinaryFile;
-            if(BinaryFile.writeBinaryToFile(fileName,
-                                            binaries[i],
-                                            binarySizes[i]))
-            {
-                std::cout << "Failed to load kernel file : " << fileName << std::endl;
-                return SDK_FAILURE;
-            }
-        }
-        else
-        {
-            printf(
-                "%s binary kernel(%s) : %s\n",
-                deviceName,
-                fileName,
-                "Skipping as there is no binary data to write!");
-        }
-    }
-    // Release all resouces and memory
-    for(i = 0; i < numDevices; i++)
-    {
-        if(binaries[i] != NULL)
-        {
-            free(binaries[i]);
-            binaries[i] = NULL;
-        }
-    }
-    if(binaries != NULL)
-    {
-        free(binaries);
-        binaries = NULL;
-    }
-    if(binarySizes != NULL)
-    {
-        free(binarySizes);
-        binarySizes = NULL;
-    }
-    if(devices != NULL)
-    {
-        free(devices);
-        devices = NULL;
-    }
-    status = clReleaseProgram(program);
-    CHECK_OPENCL_ERROR(status, "clReleaseProgram failed.");
-    status = clReleaseContext(context);
-    CHECK_OPENCL_ERROR(status, "clReleaseContext failed.");
-    return SDK_SUCCESS;
-}
-
-/**
  * getPlatform
  * selects intended platform
  * @param platform cl_platform_id
@@ -603,49 +370,49 @@ static int generateBinaryImage(const bifData &binaryData)
  * @param platformIdEnabled if Platform option used
  * @return 0 if success else nonzero
  */
-static int getPlatform(cl_platform_id &platform, int platformId,
-                bool platformIdEnabled)
-{
-    cl_uint numPlatforms;
-    cl_int status = clGetPlatformIDs(0, NULL, &numPlatforms);
-    CHECK_OPENCL_ERROR(status, "clGetPlatformIDs failed.");
-    if (0 < numPlatforms)
-    {
-        cl_platform_id* platforms = new cl_platform_id[numPlatforms];
-        status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-        CHECK_OPENCL_ERROR(status, "clGetPlatformIDs failed.");
-        if(platformIdEnabled)
-        {
-            platform = platforms[platformId];
-        }
-        else
-        {
-            char platformName[100];
-            for (unsigned i = 0; i < numPlatforms; ++i)
-            {
-                status = clGetPlatformInfo(platforms[i],
-                                           CL_PLATFORM_VENDOR,
-                                           sizeof(platformName),
-                                           platformName,
-                                           NULL);
-                CHECK_OPENCL_ERROR(status, "clGetPlatformInfo failed.");
-                platform = platforms[i];
-                if (!strcmp(platformName, "Advanced Micro Devices, Inc."))
-                {
-                    break;
-                }
-            }
-            std::cout << "Platform found : " << platformName << "\n";
-        }
-        delete[] platforms;
-    }
-    if(NULL == platform)
-    {
-        error("NULL platform found so Exiting Application.");
-        return SDK_FAILURE;
-    }
-    return SDK_SUCCESS;
-}
+//static int getPlatform(cl_platform_id &platform, int platformId,
+//                bool platformIdEnabled)
+//{
+//    cl_uint numPlatforms;
+//    cl_int status = clGetPlatformIDs(0, NULL, &numPlatforms);
+//    CHECK_OPENCL_ERROR(status, "clGetPlatformIDs failed.");
+//    if (0 < numPlatforms)
+//    {
+//        cl_platform_id* platforms = new cl_platform_id[numPlatforms];
+//        status = clGetPlatformIDs(numPlatforms, platforms, NULL);
+//        CHECK_OPENCL_ERROR(status, "clGetPlatformIDs failed.");
+//        if(platformIdEnabled)
+//        {
+//            platform = platforms[platformId];
+//        }
+//        else
+//        {
+//            char platformName[100];
+//            for (unsigned i = 0; i < numPlatforms; ++i)
+//            {
+//                status = clGetPlatformInfo(platforms[i],
+//                                           CL_PLATFORM_VENDOR,
+//                                           sizeof(platformName),
+//                                           platformName,
+//                                           NULL);
+//                CHECK_OPENCL_ERROR(status, "clGetPlatformInfo failed.");
+//                platform = platforms[i];
+//                if (!strcmp(platformName, "Advanced Micro Devices, Inc."))
+//                {
+//                    break;
+//                }
+//            }
+//            std::cout << "Platform found : " << platformName << "\n";
+//        }
+//        delete[] platforms;
+//    }
+//    if(NULL == platform)
+//    {
+//        error("NULL platform found so Exiting Application.");
+//        return SDK_FAILURE;
+//    }
+//    return SDK_SUCCESS;
+//}
 
 /**
  * getDevices
@@ -897,12 +664,17 @@ inline std::string getExactVerStr(std::string clVerStr)
     return finalVerStr;
 }
 
+enum platform_vendor{
+	NVIDIA = 0,
+	AMD = 1,
+	INTEL = 2
+};
 /**
-* CLCommandArgs class contains all the
+* CLContext class contains all the
 * command arguments related info passed by the user inlcuding
 * the decvice and platform infos.
 */
-class CLCommandArgs : public SDKCmdArgsParser
+class CLContext : public SDKCmdArgsParser
 {
 
     protected:
@@ -912,6 +684,8 @@ class CLCommandArgs : public SDKCmdArgsParser
         bool enablePlatform;           /**< If platformId Used */
         bool gpu;                      /**< If GPU used */
         bool amdPlatform;              /**< If AMD Platform Used */
+
+
     public:
         bool multiDevice;              /**< Cmd Line Option- if MultiGPU */
         unsigned int deviceId;         /**< Cmd Line Option- device number */
@@ -920,10 +694,15 @@ class CLCommandArgs : public SDKCmdArgsParser
         std::string dumpBinary;        /**< Cmd Line Option- Dump Binary with name */
         std::string loadBinary;        /**< Cmd Line Option- Load Binary with name */
         std::string flags;             /**< Cmd Line Option- compiler flags */
+		cl_platform_id* platforms;
+		platform_vendor* platform_vendors;
+		cl_uint numPlatforms = 0;
+		int chosen_platform = 0;
+			
 
         /**
         */
-        CLCommandArgs(bool enableMultiDevice = false)
+        CLContext(bool enableMultiDevice = false)
             :SDKCmdArgsParser ()
         {
             deviceType = "gpu";
@@ -1108,12 +887,91 @@ class CLCommandArgs : public SDKCmdArgsParser
             return SDK_SUCCESS;
         }
 
-		enum platform_vendor{
-			NVIDIA = 0,
-			AMD = 1,
-			INTEL = 2
-		};
-	
+		int getPlatforms(bool print){
+			cl_int status = CL_SUCCESS;
+			status = clGetPlatformIDs(0, NULL, &numPlatforms);
+			platforms = new cl_platform_id[numPlatforms];
+			platform_vendors = new platform_vendor[numPlatforms];
+			if (status != CL_SUCCESS)
+			{
+				std::cout << "Error: clGetPlatformIDs failed. Error code : ";
+				std::cout << getOpenCLErrorCodeStr(status) << std::endl;
+				return SDK_FAILURE;
+			}
+			if (0 < numPlatforms)
+			{
+				// Validate platformId
+				if (platformId >= numPlatforms)
+				{
+					if (numPlatforms - 1 == 0)
+					{
+						std::cout << "platformId should be 0" << std::endl;
+					}
+					else
+					{
+						std::cout << "platformId should be 0 to " << numPlatforms - 1 << std::endl;
+					}
+					usage();
+					return SDK_FAILURE;
+				}
+				// Get selected platform
+				status = clGetPlatformIDs(numPlatforms, platforms, NULL);
+				if (status != CL_SUCCESS)
+				{
+					std::cout << "Error: clGetPlatformIDs failed. Error code : ";
+					std::cout << getOpenCLErrorCodeStr(status) << std::endl;
+					return SDK_FAILURE;
+				}
+				// Print all platforms
+				for (unsigned i = 0; i < numPlatforms; ++i)
+				{
+					char pbuf[100];
+					status = clGetPlatformInfo(platforms[i],
+						CL_PLATFORM_VENDOR,
+						sizeof(pbuf),
+						pbuf,
+						NULL);
+					if (status != CL_SUCCESS)
+					{
+						std::cout << "Error: clGetPlatformInfo failed. Error code : ";
+						std::cout << getOpenCLErrorCodeStr(status) << std::endl;
+						return SDK_FAILURE;
+					}
+
+					/* Prefer AMD or NVIDIA platforms (they are not mutual)*/
+					if (!strcmp(pbuf, "Advanced Micro Devices, Inc."))
+					{
+						platform_vendors[i] = AMD;
+					}
+					else if (!strcmp(pbuf, "NVIDIA Corporation"))
+					{
+						platform_vendors[i] = NVIDIA;
+					}
+					else if (!strcmp(pbuf, "Intel(R) Corporation"))
+					{
+						platform_vendors[i] = INTEL;
+					}
+					if (print) std::cout << "Platform " << i << " : " << pbuf << ", pid:  " << platforms[i] << std::endl;
+				}
+			}
+			return SDK_SUCCESS;
+		}
+
+		void choosePlatform(){
+			for(unsigned i = 0; i < numPlatforms; ++i){
+				switch (platform_vendors[i]){
+				case AMD:
+					chosen_platform = i;
+					return;
+				case NVIDIA:
+					chosen_platform = i;
+					return;
+				case INTEL:
+					break;
+				}
+			}
+		}
+
         /**
          * validatePlatformAndDeviceOptions
          * Validates if the intended platform and device is used
@@ -1122,94 +980,18 @@ class CLCommandArgs : public SDKCmdArgsParser
         int validatePlatformAndDeviceOptions()
         {
             cl_int status = CL_SUCCESS;
-            cl_uint numPlatforms;
-            cl_platform_id platform = NULL;
-            status = clGetPlatformIDs(0, NULL, &numPlatforms);
-            if(status != CL_SUCCESS)
-            {
-                std::cout<<"Error: clGetPlatformIDs failed. Error code : ";
-                std::cout << getOpenCLErrorCodeStr(status) << std::endl;
-                return SDK_FAILURE;
-            }
+			
+			getPlatforms(true);
+            int platform = NULL;
             if (0 < numPlatforms)
             {
-                // Validate platformId
-                if(platformId >= numPlatforms)
-                {
-                    if(numPlatforms - 1 == 0)
-                    {
-                        std::cout << "platformId should be 0" << std::endl;
-                    }
-                    else
-                    {
-                        std::cout << "platformId should be 0 to " << numPlatforms - 1 << std::endl;
-                    }
-                    usage();
-                    return SDK_FAILURE;
-                }
-                // Get selected platform
-                cl_platform_id* platforms = new cl_platform_id[numPlatforms];
-				platform_vendor* platform_vendors = new platform_vendor[numPlatforms];
-                status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-                if(status != CL_SUCCESS)
-                {
-                    std::cout<<"Error: clGetPlatformIDs failed. Error code : ";
-                    std::cout << getOpenCLErrorCodeStr(status) << std::endl;
-                    return SDK_FAILURE;
-                }
-                // Print all platforms
-                for (unsigned i = 0; i < numPlatforms; ++i)
-                {
-                    char pbuf[100];
-                    status = clGetPlatformInfo(platforms[i],
-                                               CL_PLATFORM_VENDOR,
-                                               sizeof(pbuf),
-                                               pbuf,
-                                               NULL);
-                    if(status != CL_SUCCESS)
-                    {
-                        std::cout<<"Error: clGetPlatformInfo failed. Error code : ";
-                        std::cout << getOpenCLErrorCodeStr(status) << std::endl;
-                        return SDK_FAILURE;
-                    }
-
-					/* Prefer AMD or NVIDIA platforms (they are not mutual)*/
-					if (!strcmp(pbuf, "Advanced Micro Devices, Inc."))
-					{
-						platform_vendors[i] = platform_vendor::AMD;
-						platform = platforms[i];
-
-					}else if (!strcmp(pbuf, "NVIDIA Corporation"))
-					{
-						platform_vendors[i] = platform_vendor::NVIDIA;
-						platform = platforms[i];
-					}
-					else if(!strcmp(pbuf, "Intel(R) Corporation"))
-					{
-						platform_vendors[i] = platform_vendor::INTEL; 
-					}
-					
-                    std::cout << "Platform " << i << " : " << pbuf << std::endl;
-                }
-
-                if(isPlatformEnabled())
+               /* if(isPlatformEnabled())
                 {
                     platform = platforms[platformId];
-                }
-                // Check for AMD platform
-                char pbuf[100];
-                status = clGetPlatformInfo(platform,
-                                           CL_PLATFORM_VENDOR,
-                                           sizeof(pbuf),
-                                           pbuf,
-                                           NULL);
-                if(status != CL_SUCCESS)
-                {
-                    std::cout<<"Error: clGetPlatformInfo failed. Error code : ";
-                    std::cout << getOpenCLErrorCodeStr(status) << std::endl;
-                    return SDK_FAILURE;
-                }
-                if (!strcmp(pbuf, "Advanced Micro Devices, Inc."))
+                }*/
+				choosePlatform();
+				platform = chosen_platform;
+				if (platform_vendors[platform] == AMD)
                 {
                     amdPlatform = true;
                 }
@@ -1232,7 +1014,7 @@ class CLCommandArgs : public SDKCmdArgsParser
                     cl_context_properties cps[3] =
                     {
                         CL_CONTEXT_PLATFORM,
-                        (cl_context_properties)platform,
+                        (cl_context_properties)platforms[platform],
                         0
                     };
                     cl_context context = clCreateContextFromType(cps,
@@ -1249,7 +1031,7 @@ class CLCommandArgs : public SDKCmdArgsParser
                 }
                 // Get device count
                 cl_uint deviceCount = 0;
-                status = clGetDeviceIDs(platform, dType, 0, NULL, &deviceCount);
+				status = clGetDeviceIDs(platforms[platform], dType, 0, NULL, &deviceCount);
                 if(status != CL_SUCCESS)
                 {
                     std::cout<<"Error: clGetDeviceIDs failed. Error code : ";
@@ -1270,7 +1052,6 @@ class CLCommandArgs : public SDKCmdArgsParser
                     usage();
                     return SDK_FAILURE;
                 }
-                delete[] platforms;
             }
             return SDK_SUCCESS;
         }
@@ -1362,6 +1143,203 @@ class CLCommandArgs : public SDKCmdArgsParser
         }
 
 };
+
+
+/**
+* generateBinaryImage
+* geenrate Binary for a kernel
+* @param binaryData bifdata object
+* @return 0 if success else nonzero
+*/
+static int generateBinaryImage(const bifData &binaryData, CLContext* cxt)
+{
+	cl_int status = CL_SUCCESS;
+	/*
+	* If we could find our platform, use it. Otherwise use just available platform.
+	*/
+	cl_context_properties cps[5] =
+	{
+		CL_CONTEXT_PLATFORM,
+		(cl_context_properties)cxt->platforms[cxt->chosen_platform],
+		CL_CONTEXT_OFFLINE_DEVICES_AMD,
+		(cl_context_properties)1,
+		0
+	};
+	cl_context context = clCreateContextFromType(
+		cps,
+		CL_DEVICE_TYPE_ALL,
+		NULL,
+		NULL,
+		&status);
+	CHECK_OPENCL_ERROR(status, "clCreateContextFromType failed.");
+	/* create a CL program using the kernel source */
+	SDKFile kernelFile;
+	std::string kernelPath = getPath();
+	kernelPath.append(binaryData.kernelName.c_str());
+	if (!kernelFile.open(kernelPath.c_str()))
+	{
+		std::cout << "Failed to load kernel file : " << kernelPath << std::endl;
+		return SDK_FAILURE;
+	}
+	const char * source = kernelFile.source().c_str();
+	size_t sourceSize[] = { strlen(source) };
+	cl_program program = clCreateProgramWithSource(
+		context,
+		1,
+		&source,
+		sourceSize,
+		&status);
+	CHECK_OPENCL_ERROR(status, "clCreateProgramWithSource failed.");
+	std::string flagsStr = std::string(binaryData.flagsStr.c_str());
+	// Get additional options
+	if (binaryData.flagsFileName.size() != 0)
+	{
+		SDKFile flagsFile;
+		std::string flagsPath = getPath();
+		flagsPath.append(binaryData.flagsFileName.c_str());
+		if (!flagsFile.open(flagsPath.c_str()))
+		{
+			std::cout << "Failed to load flags file: " << flagsPath << std::endl;
+			return SDK_FAILURE;
+		}
+		flagsFile.replaceNewlineWithSpaces();
+		const char * flags = flagsFile.source().c_str();
+		flagsStr.append(flags);
+	}
+	if (flagsStr.size() != 0)
+	{
+		std::cout << "Build Options are : " << flagsStr.c_str() << std::endl;
+	}
+	/* create a cl program executable for all the devices specified */
+	status = clBuildProgram(
+		program,
+		0,
+		NULL,
+		flagsStr.c_str(),
+		NULL,
+		NULL);
+	/* This function is intentionally left without a error check
+	as it may not pass if kernels rely on specific properties of devices
+	In such cases, binaries for eligible devices are geenrated and dumped
+	even wen this function will return an error */
+	//CHECK_OPENCL_ERROR(status, "clBuildProgram failed.");
+	size_t numDevices;
+	status = clGetProgramInfo(
+		program,
+		CL_PROGRAM_NUM_DEVICES,
+		sizeof(numDevices),
+		&numDevices,
+		NULL);
+	CHECK_OPENCL_ERROR(status, "clGetProgramInfo(CL_PROGRAM_NUM_DEVICES) failed.");
+	std::cout << "Number of devices found : " << numDevices << "\n\n";
+	cl_device_id *devices = (cl_device_id *)malloc(sizeof(cl_device_id) *
+		numDevices);
+	CHECK_ALLOCATION(devices, "Failed to allocate host memory.(devices)");
+	/* grab the handles to all of the devices in the program. */
+	status = clGetProgramInfo(
+		program,
+		CL_PROGRAM_DEVICES,
+		sizeof(cl_device_id) * numDevices,
+		devices,
+		NULL);
+	CHECK_OPENCL_ERROR(status, "clGetProgramInfo(CL_PROGRAM_DEVICES) failed.");
+	/* figure out the sizes of each of the binaries. */
+	size_t *binarySizes = (size_t*)malloc(sizeof(size_t) * numDevices);
+	CHECK_ALLOCATION(binarySizes, "Failed to allocate host memory.(binarySizes)");
+	status = clGetProgramInfo(
+		program,
+		CL_PROGRAM_BINARY_SIZES,
+		sizeof(size_t) * numDevices,
+		binarySizes,
+		NULL);
+	CHECK_OPENCL_ERROR(status, "clGetProgramInfo(CL_PROGRAM_BINARY_SIZES) failed.");
+	size_t i = 0;
+	/* copy over all of the generated binaries. */
+	char **binaries = (char **)malloc(sizeof(char *) * numDevices);
+	CHECK_ALLOCATION(binaries, "Failed to allocate host memory.(binaries)");
+	for (i = 0; i < numDevices; i++)
+	{
+		if (binarySizes[i] != 0)
+		{
+			binaries[i] = (char *)malloc(sizeof(char) * binarySizes[i]);
+			CHECK_ALLOCATION(binaries[i], "Failed to allocate host memory.(binaries[i])");
+		}
+		else
+		{
+			binaries[i] = NULL;
+		}
+	}
+	status = clGetProgramInfo(
+		program,
+		CL_PROGRAM_BINARIES,
+		sizeof(char *) * numDevices,
+		binaries,
+		NULL);
+	CHECK_OPENCL_ERROR(status, "clGetProgramInfo(CL_PROGRAM_BINARIES) failed.");
+	/* dump out each binary into its own separate file. */
+	for (i = 0; i < numDevices; i++)
+	{
+		char fileName[100];
+		sprintf(fileName, "%s.%d", binaryData.binaryName.c_str(), (int)i);
+		char deviceName[1024];
+		status = clGetDeviceInfo(
+			devices[i],
+			CL_DEVICE_NAME,
+			sizeof(deviceName),
+			deviceName,
+			NULL);
+		CHECK_OPENCL_ERROR(status, "clGetDeviceInfo(CL_DEVICE_NAME) failed.");
+		if (binarySizes[i] != 0)
+		{
+			printf("%s binary kernel: %s\n", deviceName, fileName);
+			SDKFile BinaryFile;
+			if (BinaryFile.writeBinaryToFile(fileName,
+				binaries[i],
+				binarySizes[i]))
+			{
+				std::cout << "Failed to load kernel file : " << fileName << std::endl;
+				return SDK_FAILURE;
+			}
+		}
+		else
+		{
+			printf(
+				"%s binary kernel(%s) : %s\n",
+				deviceName,
+				fileName,
+				"Skipping as there is no binary data to write!");
+		}
+	}
+	// Release all resouces and memory
+	for (i = 0; i < numDevices; i++)
+	{
+		if (binaries[i] != NULL)
+		{
+			free(binaries[i]);
+			binaries[i] = NULL;
+		}
+	}
+	if (binaries != NULL)
+	{
+		free(binaries);
+		binaries = NULL;
+	}
+	if (binarySizes != NULL)
+	{
+		free(binarySizes);
+		binarySizes = NULL;
+	}
+	if (devices != NULL)
+	{
+		free(devices);
+		devices = NULL;
+	}
+	status = clReleaseProgram(program);
+	CHECK_OPENCL_ERROR(status, "clReleaseProgram failed.");
+	status = clReleaseContext(context);
+	CHECK_OPENCL_ERROR(status, "clReleaseContext failed.");
+	return SDK_SUCCESS;
+}
 
 /**
  * KernelWorkGroupInfo

@@ -79,13 +79,13 @@ SobelFilter::genBinaryImage()
     bifData binaryData;
     binaryData.kernelName = std::string("SobelFilter_Kernels.cl");
     binaryData.flagsStr = std::string("");
-    if(sampleArgs->isComplierFlagsSpecified())
+    if(sdkContext->isComplierFlagsSpecified())
     {
-        binaryData.flagsFileName = std::string(sampleArgs->flags.c_str());
+        binaryData.flagsFileName = std::string(sdkContext->flags.c_str());
     }
 
-    binaryData.binaryName = std::string(sampleArgs->dumpBinary.c_str());
-    int status = generateBinaryImage(binaryData);
+    binaryData.binaryName = std::string(sdkContext->dumpBinary.c_str());
+	int status = generateBinaryImage(binaryData, sdkContext);
     return status;
 }
 
@@ -96,31 +96,24 @@ SobelFilter::setupCL()
     cl_int status = CL_SUCCESS;
     cl_device_type dType;
 
-    if(sampleArgs->deviceType.compare("cpu") == 0)
+    if(sdkContext->deviceType.compare("cpu") == 0)
     {
         dType = CL_DEVICE_TYPE_CPU;
     }
     else //deviceType = "gpu"
     {
         dType = CL_DEVICE_TYPE_GPU;
-        if(sampleArgs->isThereGPU() == false)
+        if(sdkContext->isThereGPU() == false)
         {
             std::cout << "GPU not found. Falling back to CPU device" << std::endl;
             dType = CL_DEVICE_TYPE_CPU;
         }
     }
 
-    /*
-     * Have a look at the available platforms and pick either
-     * the AMD one if available or a reasonable default.
-     */
-    cl_platform_id platform = NULL;
-    int retValue = getPlatform(platform, sampleArgs->platformId,
-                               sampleArgs->isPlatformEnabled());
-    CHECK_ERROR(retValue, SDK_SUCCESS, "getPlatform() failed");
+	cl_platform_id platform = sdkContext->platforms[sdkContext->chosen_platform];
 
     // Display available devices.
-    retValue = displayDevices(platform, dType);
+	int retValue = displayDevices(platform, dType);
     CHECK_ERROR(retValue, SDK_SUCCESS, "displayDevices() failed");
 
 
@@ -141,8 +134,8 @@ SobelFilter::setupCL()
     CHECK_OPENCL_ERROR( status, "clCreateContextFromType failed.");
 
     // getting device on which to run the sample
-    status = getDevices(context,&devices,sampleArgs->deviceId,
-                        sampleArgs->isDeviceIdEnabled());
+    status = getDevices(context,&devices,sdkContext->deviceId,
+                        sdkContext->isDeviceIdEnabled());
     CHECK_ERROR(status, SDK_SUCCESS, "getDevices() failed");
 
     {
@@ -150,14 +143,14 @@ SobelFilter::setupCL()
         cl_command_queue_properties prop = 0;
         commandQueue = clCreateCommandQueue(
                            context,
-                           devices[sampleArgs->deviceId],
+                           devices[sdkContext->deviceId],
                            prop,
                            &status);
         CHECK_OPENCL_ERROR( status, "clCreateCommandQueue failed.");
     }
 
     //Set device info of given cl_device_id
-    retValue = deviceInfo.setDeviceInfo(devices[sampleArgs->deviceId]);
+    retValue = deviceInfo.setDeviceInfo(devices[sdkContext->deviceId]);
     CHECK_ERROR(retValue, 0, "SDKDeviceInfo::setDeviceInfo() failed");
 
 
@@ -188,16 +181,16 @@ SobelFilter::setupCL()
     buildProgramData buildData;
     buildData.kernelName = std::string("SobelFilter_Kernels.cl");
     buildData.devices = devices;
-    buildData.deviceId = sampleArgs->deviceId;
+    buildData.deviceId = sdkContext->deviceId;
     buildData.flagsStr = std::string("");
-    if(sampleArgs->isLoadBinaryEnabled())
+    if(sdkContext->isLoadBinaryEnabled())
     {
-        buildData.binaryName = std::string(sampleArgs->loadBinary.c_str());
+        buildData.binaryName = std::string(sdkContext->loadBinary.c_str());
     }
 
-    if(sampleArgs->isComplierFlagsSpecified())
+    if(sdkContext->isComplierFlagsSpecified())
     {
-        buildData.flagsFileName = std::string(sampleArgs->flags.c_str());
+        buildData.flagsFileName = std::string(sdkContext->flags.c_str());
     }
 
     retValue = buildOpenCLProgram(program, context, buildData);
@@ -211,13 +204,13 @@ SobelFilter::setupCL()
     CHECK_OPENCL_ERROR(status, "clCreateKernel failed.");
 
     status = kernelInfo.setKernelWorkGroupInfo(kernel,
-             devices[sampleArgs->deviceId]);
+             devices[sdkContext->deviceId]);
     CHECK_ERROR(status, SDK_SUCCESS,"kernelInfo.setKernelWorkGroupInfo() failed");
 
 
     if((blockSizeX * blockSizeY) > kernelInfo.kernelWorkGroupSize)
     {
-        if(!sampleArgs->quiet)
+        if(!sdkContext->quiet)
         {
             std::cout << "Out of Resources!" << std::endl;
             std::cout << "Group Size specified : "
@@ -334,7 +327,7 @@ SobelFilter::initialize()
 {
     cl_int status = 0;
     // Call base class Initialize to get default configuration
-    status = sampleArgs->initialize();
+    status = sdkContext->initialize();
     CHECK_ERROR(status, SDK_SUCCESS, "OpenCL Initialization failed");
 
     Option* iteration_option = new Option;
@@ -346,7 +339,7 @@ SobelFilter::initialize()
     iteration_option->_type = CA_ARG_INT;
     iteration_option->_value = &iterations;
 
-    sampleArgs->AddOption(iteration_option);
+    sdkContext->AddOption(iteration_option);
 
     delete iteration_option;
 
@@ -554,7 +547,7 @@ SobelFilter::verifyResults()
         return SDK_SUCCESS;
     }
 
-    if(sampleArgs->verify)
+    if(sdkContext->verify)
     {
         // reference implementation
         sobelFilterCPUReference();
@@ -607,7 +600,7 @@ SobelFilter::verifyResults()
 void
 SobelFilter::printStats()
 {
-    if(sampleArgs->timing)
+    if(sdkContext->timing)
     {
         std::string strArray[4] =
         {
@@ -641,12 +634,12 @@ main(int argc, char * argv[])
         return SDK_FAILURE;
     }
 
-    if(clSobelFilter.sampleArgs->parseCommandLine(argc, argv) != SDK_SUCCESS)
+    if(clSobelFilter.sdkContext->parseCommandLine(argc, argv) != SDK_SUCCESS)
     {
         return SDK_FAILURE;
     }
 
-    if(clSobelFilter.sampleArgs->isDumpBinaryEnabled())
+    if(clSobelFilter.sdkContext->isDumpBinaryEnabled())
     {
         return clSobelFilter.genBinaryImage();
     }
