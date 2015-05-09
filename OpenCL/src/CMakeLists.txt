@@ -15,8 +15,8 @@
 #################################################################################
 
 
-set( SAMPLE_NAME SobelFilter )
-set( SOURCE_FILES SobelFilter.cpp )
+set( SAMPLE_NAME EdgeDetector )
+set( SOURCE_FILES EdgeDetector.cpp )
 set( EXTRA_FILES SobelFilter_Kernels.cl big.bmp )
 
 ############################################################################
@@ -109,7 +109,7 @@ set( LINKER_FLAGS " " )
 set( ADDITIONAL_LIBRARIES "" )
 
 file(GLOB INCLUDE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h" )
-include_directories( ${OPENCL_INCLUDE_DIRS} ../include/SDKUtil ../include/SDKUtil )
+include_directories( ${OPENCL_INCLUDE_DIRS}  ../include/NVIDIAUtil )
 
 add_executable( ${SAMPLE_NAME} ${SOURCE_FILES} ${INCLUDE_FILES} ${EXTRA_FILES})
 
