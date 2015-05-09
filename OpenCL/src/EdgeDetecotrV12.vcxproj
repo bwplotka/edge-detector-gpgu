@@ -110,7 +110,7 @@
     </Link>
     <PostBuildEvent>
       <Command>copy SobelFilter_Kernels.cl "$(OutDir)SobelFilter_Kernels.cl" /Y
-copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
+copy Input_Image.bmp "$(OutDir)Input_Image.bmp" /Y
 	  </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -224,6 +224,7 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EdgeDetector.hpp" />
+    <ClInclude Include="OpenCLUtil.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="SobelFilter_Kernels.cl" />
@@ -233,6 +234,9 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
   </ItemGroup>
   <ItemGroup>
     <Image Include="big.bmp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="CMakeLists.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
