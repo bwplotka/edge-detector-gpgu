@@ -93,6 +93,9 @@ struct bifData
  */
 struct buildProgramData
 {
+	//TODO: Need to change kernelName to array of kernels!! (We want to have multiple kernels in our programs)
+	//MAKE SURE method where it is used are also modified!!!
+
     std::string kernelName;             /**< kernelName name of the kernel */
     std::string
     flagsFileName;          /**< flagFileName name of the file of flags */

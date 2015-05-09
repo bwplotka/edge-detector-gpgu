@@ -3,7 +3,7 @@
 
 
 int
-SobelFilter::readInputImage(std::string inputImageName)
+EdgeDetector::readInputImage(std::string inputImageName)
 {
 
     // load input bitmap image
@@ -58,7 +58,7 @@ SobelFilter::readInputImage(std::string inputImageName)
 
 
 int
-SobelFilter::writeOutputImage(std::string outputImageName)
+EdgeDetector::writeOutputImage(std::string outputImageName)
 {
     // copy output image data back to original pixel data
     memcpy(pixelData, outputImageData, width * height * pixelSize);
@@ -74,10 +74,10 @@ SobelFilter::writeOutputImage(std::string outputImageName)
 }
 
 int
-SobelFilter::genBinaryImage()
+EdgeDetector::genBinaryImage()
 {
     bifData binaryData;
-    binaryData.kernelName = std::string("SobelFilter_Kernels.cl");
+    binaryData.kernelName = std::string("EdgeDetector_Kernels.cl");
     binaryData.flagsStr = std::string("");
     if(sdkContext->isComplierFlagsSpecified())
     {
@@ -91,7 +91,7 @@ SobelFilter::genBinaryImage()
 
 
 int
-SobelFilter::setupCL()
+EdgeDetector::setupCL()
 {
     cl_int status = CL_SUCCESS;
     cl_device_type dType;
@@ -231,7 +231,7 @@ SobelFilter::setupCL()
 }
 
 int
-SobelFilter::runCLKernels()
+EdgeDetector::runCLKernels()
 {
     cl_int status;
 
@@ -323,7 +323,7 @@ SobelFilter::runCLKernels()
 
 
 int
-SobelFilter::initialize()
+EdgeDetector::initialize()
 {
     cl_int status = 0;
     // Call base class Initialize to get default configuration
@@ -347,7 +347,7 @@ SobelFilter::initialize()
 }
 
 int
-SobelFilter::setup()
+EdgeDetector::setup()
 {
     cl_int status = 0;
     // Allocate host memory and read input image
@@ -376,7 +376,7 @@ SobelFilter::setup()
 
 
 int
-SobelFilter::run()
+EdgeDetector::run()
 {
     cl_int status = 0;
     if(!byteRWSupport)
@@ -423,7 +423,7 @@ SobelFilter::run()
 }
 
 int
-SobelFilter::cleanup()
+EdgeDetector::cleanup()
 {
     if(!byteRWSupport)
     {
@@ -465,7 +465,7 @@ SobelFilter::cleanup()
 
 
 void
-SobelFilter::sobelFilterCPUReference()
+EdgeDetector::EdgeDetectorCPUReference()
 {
     // x-axis gradient mask
     const int kx[][3] =
@@ -540,7 +540,7 @@ SobelFilter::sobelFilterCPUReference()
 
 
 int
-SobelFilter::verifyResults()
+EdgeDetector::verifyResults()
 {
     if(!byteRWSupport)
     {
@@ -550,7 +550,7 @@ SobelFilter::verifyResults()
     if(sdkContext->verify)
     {
         // reference implementation
-        sobelFilterCPUReference();
+        EdgeDetectorCPUReference();
 
         float *outputDevice = new float[width * height * pixelSize];
         CHECK_ALLOCATION(outputDevice,
@@ -598,7 +598,7 @@ SobelFilter::verifyResults()
 }
 
 void
-SobelFilter::printStats()
+EdgeDetector::printStats()
 {
     if(sdkContext->timing)
     {
@@ -627,44 +627,44 @@ int
 main(int argc, char * argv[])
 {
     cl_int status = 0;
-    SobelFilter clSobelFilter;
+    EdgeDetector clEdgeDetector;
 
-    if(clSobelFilter.initialize() != SDK_SUCCESS)
+    if(clEdgeDetector.initialize() != SDK_SUCCESS)
     {
         return SDK_FAILURE;
     }
 
-    if(clSobelFilter.sdkContext->parseCommandLine(argc, argv) != SDK_SUCCESS)
+    if(clEdgeDetector.sdkContext->parseCommandLine(argc, argv) != SDK_SUCCESS)
     {
         return SDK_FAILURE;
     }
 
-    if(clSobelFilter.sdkContext->isDumpBinaryEnabled())
+    if(clEdgeDetector.sdkContext->isDumpBinaryEnabled())
     {
-        return clSobelFilter.genBinaryImage();
+        return clEdgeDetector.genBinaryImage();
     }
 
-    status = clSobelFilter.setup();
+    status = clEdgeDetector.setup();
     if(status != SDK_SUCCESS)
     {
         return status;
     }
 
-    if(clSobelFilter.run() != SDK_SUCCESS)
+    if(clEdgeDetector.run() != SDK_SUCCESS)
     {
         return SDK_FAILURE;
     }
 
-    if(clSobelFilter.verifyResults() != SDK_SUCCESS)
+    if(clEdgeDetector.verifyResults() != SDK_SUCCESS)
     {
         return SDK_FAILURE;
     }
 
-    if(clSobelFilter.cleanup() != SDK_SUCCESS)
+    if(clEdgeDetector.cleanup() != SDK_SUCCESS)
     {
         return SDK_FAILURE;
     }
 
-    clSobelFilter.printStats();
+    clEdgeDetector.printStats();
     return SDK_SUCCESS;
 }

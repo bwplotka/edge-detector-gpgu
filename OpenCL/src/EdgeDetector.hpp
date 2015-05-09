@@ -10,19 +10,17 @@
 
 using namespace appsdk;
 
-#define SAMPLE_VERSION "AMD-APP-SDK-v2.9-1.599.2"
-
 #define INPUT_IMAGE "Input_Image.bmp"
-#define OUTPUT_IMAGE "Onput_Image.bmp"
+#define OUTPUT_IMAGE "Output_Image.bmp"
 
 #define GROUP_SIZE 256
 
 /**
-* SobelFilter
+* EdgeDetector
 * Class implements OpenCL Sobel Filter sample
 */
 
-class SobelFilter
+class EdgeDetector
 {
         cl_double setupTime;                /**< time taken to setup OpenCL resources and building kernel */
         cl_double kernelTime;               /**< time taken to run kernel and read result back */
@@ -75,7 +73,7 @@ class SobelFilter
         * Constructor
         * Initialize member variables
         */
-        SobelFilter()
+        EdgeDetector()
             : inputImageData(NULL),
               outputImageData(NULL),
               verificationOutput(NULL),
@@ -83,7 +81,6 @@ class SobelFilter
         {
             sdkContext = new CLContext();
             sampleTimer = new SDKTimer();
-			sdkContext->sampleVerStr = SAMPLE_VERSION;
             pixelSize = sizeof(uchar4);
             pixelData = NULL;
             blockSizeX = GROUP_SIZE;
@@ -91,7 +88,7 @@ class SobelFilter
             iterations = 1;
         }
 
-        ~SobelFilter()
+        ~EdgeDetector()
         {
         }
 
@@ -99,7 +96,7 @@ class SobelFilter
         * Allocate image memory and Load bitmap file
         * @return SDK_SUCCESS on success and SDK_FAILURE on failure
         */
-        int setupSobelFilter();
+        int setupEdgeDetector();
 
         /**
         * OpenCL related initialisations.
@@ -121,7 +118,7 @@ class SobelFilter
         * Reference CPU implementation of Binomial Option
         * for performance comparison
         */
-        void sobelFilterCPUReference();
+        void EdgeDetectorCPUReference();
 
         /**
         * Override from SDKSample. Print sample stats.
