@@ -115,8 +115,8 @@ EdgeDetector::setupCL()
     // Display available devices.
 	int retValue = displayDevices(platform, dType);
     CHECK_ERROR(retValue, SDK_SUCCESS, "displayDevices() failed");
-
-
+	std::cout << "Selected Device: " << sdkContext->deviceId  << std::endl;
+	
     // If we could find our platform, use it. Otherwise use just available platform.
     cl_context_properties cps[3] =
     {
@@ -352,7 +352,7 @@ EdgeDetector::setup()
     cl_int status = 0;
     // Allocate host memory and read input image
     std::string filePath = getPath() + std::string(INPUT_IMAGE);
-	std::cout << "file " << filePath << std::endl;
+	std::cout << "Input File:  " << filePath << std::endl;
     status = readInputImage(filePath);
     CHECK_ERROR(status, SDK_SUCCESS, "Read InputImage failed");
 

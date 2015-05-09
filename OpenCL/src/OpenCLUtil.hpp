@@ -961,6 +961,10 @@ class CLContext : public SDKCmdArgsParser
 		}
 
 		void choosePlatform(){
+			if (isPlatformEnabled()){
+				chosen_platform = platformId;
+				return;
+			}
 			for(unsigned i = 0; i < numPlatforms; ++i){
 				switch (platform_vendors[i]){
 				case AMD:
@@ -988,10 +992,6 @@ class CLContext : public SDKCmdArgsParser
             int platform = NULL;
             if (0 < numPlatforms)
             {
-               /* if(isPlatformEnabled())
-                {
-                    platform = platforms[platformId];
-                }*/
 				choosePlatform();
 				platform = chosen_platform;
 				if (platform_vendors[platform] == AMD)
