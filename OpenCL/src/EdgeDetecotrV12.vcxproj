@@ -136,7 +136,7 @@ copy Input_Image.bmp "$(OutDir)Input_Image.bmp" /Y
       <AdditionalOptions> /machine:x64 /debug %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <PostBuildEvent>
-      <Command>copy SobelFilter_Kernels.cl "$(OutDir)SobelFilter_Kernels.cl" /Y
+      <Command>copy kernels "$(OutDir)kernels" /Y
 copy Input_Image.bmp "$(OutDir)Input_Image.bmp" /Y
 	  </Command>
     </PostBuildEvent>
@@ -230,6 +230,11 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
     <ClInclude Include="OpenCLUtil.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <none Include="kernels\Gaussian_Kernels.cl" />
+    <none Include="kernels\GreyScale_Kernels.cl" />
+    <none Include="kernels\Hysteresis_Kernels.cl" />
+    <none Include="kernels\Max_Kernels.cl" />
+    <none Include="kernels\SobelFilter_Kernels.cl" />
     <None Include="SobelFilter_Input.bmp" />
   </ItemGroup>
   <ItemGroup>
@@ -237,13 +242,6 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
   </ItemGroup>
   <ItemGroup>
     <Text Include="CMakeLists.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <none Include="kernels\Gaussian_Kernels.cl" />
-    <none Include="kernels\GreyScale_Kernels.cl" />
-    <none Include="kernels\Hysteresis_Kernels.cl" />
-    <none Include="kernels\Max_Kernels.cl" />
-    <none Include="kernels\SobelFilter_Kernels.cl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
