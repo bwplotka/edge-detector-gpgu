@@ -52,6 +52,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\IntelOpenCL.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -101,7 +102,7 @@
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\..\..\..\lib\win32\;..\lib-win\x86\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\..\..\..\lib\win32\;C:\Intel\INDE\code_builder_5.1.0.25\lib\x64;..\lib-win\x86\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib;OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
@@ -118,7 +119,7 @@ copy Input_Image.bmp "$(OutDir)Input_Image.bmp" /Y
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../../../../include;../../../../include/SDKUtil;$(AMDAPPSDKROOT)/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../include;../include/AMDSDKUtil;$(AMDAPPSDKROOT)/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;_CRT_SECURE_NO_WARNINGS;CMAKE_INTDIR="Debug";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
@@ -129,7 +130,7 @@ copy Input_Image.bmp "$(OutDir)Input_Image.bmp" /Y
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\..\..\..\lib\win64\;$(AMDAPPSDKROOT)\lib\x86_64\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Intel\INDE\code_builder_5.1.0.25\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib;OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <ImportLibrary>$(SolutionDir)bin/x86_64/Debug/SobelFilter.lib</ImportLibrary>
@@ -138,9 +139,12 @@ copy Input_Image.bmp "$(OutDir)Input_Image.bmp" /Y
     </Link>
     <PostBuildEvent>
       <Command>copy SobelFilter_Kernels.cl "$(OutDir)SobelFilter_Kernels.cl" /Y
-copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
+copy Input_Image.bmp "$(OutDir)Input_Image.bmp" /Y
 	  </Command>
     </PostBuildEvent>
+    <Intel_OpenCL_Build_Rules>
+      <Include>../include;../include/AMDSDKUtil;%(Include)</Include>
+    </Intel_OpenCL_Build_Rules>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -227,7 +231,7 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
     <ClInclude Include="OpenCLUtil.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="SobelFilter_Kernels.cl" />
+    <Intel_OpenCL_Build_Rules Include="SobelFilter_Kernels.cl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="SobelFilter_Input.bmp" />
@@ -240,5 +244,6 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\IntelOpenCL.targets" />
   </ImportGroup>
 </Project>
