@@ -225,13 +225,11 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="EdgeDetector.cpp" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EdgeDetector.hpp" />
     <ClInclude Include="OpenCLUtil.hpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <Intel_OpenCL_Build_Rules Include="SobelFilter_Kernels.cl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="SobelFilter_Input.bmp" />
@@ -241,6 +239,13 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
   </ItemGroup>
   <ItemGroup>
     <Text Include="CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Intel_OpenCL_Build_Rules Include="kernels\Gaussian_Kernels.cl" />
+    <Intel_OpenCL_Build_Rules Include="kernels\GreyScale_Kernels.cl" />
+    <Intel_OpenCL_Build_Rules Include="kernels\Hysteresis_Kernels.cl" />
+    <Intel_OpenCL_Build_Rules Include="kernels\Max_Kernels.cl" />
+    <Intel_OpenCL_Build_Rules Include="kernels\SobelFilter_Kernels.cl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,6 +1,5 @@
 #ifndef Edge_Detector_H_
 #define Edge_Detector_H_
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -10,10 +9,17 @@
 
 using namespace appsdk;
 
-#define INPUT_IMAGE "Input_Image.bmp"
-#define OUTPUT_IMAGE "Output_Image.bmp"
+#define GAUSSIAN_KERNEL "kernels/Gaussian_Kernels.cl"
+#define GREYSCALE_KERNEL "kernels/GreyScale_Kernels.cl"
+#define MAX_KERNEL "kernels/Max_Kernels.cl"
+#define HYSTERESIS_KERNEL "kernels/Hysteresis_Kernels.cl"
+#define SOBEL_FILTER_KERNEL "kernels/SobelFilter_Kernels.cl"
 
-#define GROUP_SIZE 256
+
+#define INPUT_IMAGE "Input_Image.bmp"
+#define OUTPUT_IMAGE "Output_Image1.bmp"
+
+#define GROUP_SIZE 8
 
 /**
 * EdgeDetector
@@ -26,23 +32,39 @@ class EdgeDetector
         cl_double kernelTime;               /**< time taken to run kernel and read result back */
         cl_uchar4* inputImageData;          /**< Input bitmap data to device */
         cl_uchar4* outputImageData;         /**< Output from device */
+		//cl_uchar4* nextImageData;
         cl_context context;                 /**< CL context */
         cl_device_id *devices;              /**< CL device list */
         cl_mem inputImageBuffer;            /**< CL memory buffer for input Image*/
-        cl_mem outputImageBuffer;           /**< CL memory buffer for Output Image*/
+        cl_mem prevImageBuffer;           /**< CL memory buffer for Output Image*/
+		cl_mem nextImageBuffer;
+		//cl_mem buffers_[2];
+		cl_mem thetaBuffer;
         cl_uchar* verificationOutput;       /**< Output array for reference implementation */
         cl_command_queue commandQueue;      /**< CL command queue */
-        cl_program program;                 /**< CL program  */
-        cl_kernel kernel;                   /**< CL kernel */
+        cl_program programGrey;                 /**< CL program  */
+		cl_program programGaus;
+		cl_program programSobel;
+		cl_program programMax;
+		cl_program programHyst;
+        cl_kernel kernelGrey;                   /**< CL kernel */
+		cl_kernel kernelGaus;
+		cl_kernel kernelSobel;
+		cl_kernel kernelMax;
+		cl_kernel kernelHyst;
+		//cl_kernel kernel;
         SDKBitMap inputBitmap;   /**< Bitmap class object */
         uchar4* pixelData;       /**< Pointer to image data */
         cl_uint pixelSize;                  /**< Size of a pixel in BMP format> */
         cl_uint width;                      /**< Width of image */
         cl_uint height;                     /**< Height of image */
+		cl_uint width_original;
+		cl_uint height_original;
         cl_bool byteRWSupport;
         size_t kernelWorkGroupSize;         /**< Group Size returned by kernel */
         size_t blockSizeX;                  /**< Work-group size in x-direction */
         size_t blockSizeY;                  /**< Work-group size in y-direction */
+		size_t buffer_index_ = 0;
         int iterations;                     /**< Number of iterations for kernel execution */
         SDKDeviceInfo
         deviceInfo;                       /**< Structure to store device information*/
@@ -50,6 +72,7 @@ class EdgeDetector
         kernelInfo;         /**< Structure to store kernel related info */
 
         SDKTimer    *sampleTimer;      /**< SDKTimer object */
+
 
     public:
 
@@ -76,6 +99,7 @@ class EdgeDetector
         EdgeDetector()
             : inputImageData(NULL),
               outputImageData(NULL),
+			  //nextImageData(NULL),
               verificationOutput(NULL),
               byteRWSupport(true)
         {
@@ -86,6 +110,7 @@ class EdgeDetector
             blockSizeX = GROUP_SIZE;
             blockSizeY = 1;
             iterations = 1;
+			
         }
 
         ~EdgeDetector()
@@ -166,6 +191,24 @@ class EdgeDetector
         * @return SDK_SUCCESS on success and SDK_FAILURE on failure
         */
         int verifyResults();
+
+
+
+		int GreyScale();
+
+		int Gaussian();
+
+		int Sobel();
+
+		int Hysteresis();
+
+		int Max();
+
+		//inline cl_mem& NextBuff() { return buffers_[buffer_index_]; }
+
+		//inline cl_mem& PrevBuff() { return buffers_[buffer_index_ ^ 1]; }
+
+		//inline void AdvanceBuff() { buffer_index_ ^= 1; }
 };
 
 #endif // Edge_Detector_H_

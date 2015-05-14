@@ -18,23 +18,17 @@ EdgeDetector::readInputImage(std::string inputImageName)
 
 
     // get width and height of input image
-    height = inputBitmap.getHeight();
-    width = inputBitmap.getWidth();
-
+    height_original = inputBitmap.getHeight();
+    width_original = inputBitmap.getWidth();
+	height = ((height_original) / GROUP_SIZE) * GROUP_SIZE ;
+	width = ((width_original) / GROUP_SIZE) * GROUP_SIZE ;
     // allocate memory for input & output image data
-    inputImageData  = (cl_uchar4*)malloc(width * height * sizeof(cl_uchar4));
+	inputImageData = (cl_uchar4*)malloc(width_original * height_original * sizeof(cl_uchar4));
     CHECK_ALLOCATION(inputImageData, "Failed to allocate memory! (inputImageData)");
 
-    // allocate memory for output image data
-    outputImageData = (cl_uchar4*)malloc(width * height * sizeof(cl_uchar4));
-    CHECK_ALLOCATION(outputImageData,
-                     "Failed to allocate memory! (outputImageData)");
+	outputImageData = (cl_uchar4*)malloc(width_original * height_original * sizeof(cl_uchar4));
 
-    // initializa the Image data to NULL
-    memset(outputImageData, 0, width * height * pixelSize);
-
-    // get the pointer to pixel data
-    pixelData = inputBitmap.getPixels();
+	pixelData = inputBitmap.getPixels();
     if(pixelData == NULL)
     {
         std::cout << "Failed to read pixel Data!";
@@ -42,15 +36,14 @@ EdgeDetector::readInputImage(std::string inputImageName)
     }
 
     // Copy pixel data into inputImageData
-    memcpy(inputImageData, pixelData, width * height * pixelSize);
-
+	memcpy(inputImageData, pixelData, width_original * height_original * pixelSize);
     // allocate memory for verification output
-    verificationOutput = (cl_uchar*)malloc(width * height * pixelSize);
+	verificationOutput = (cl_uchar*)malloc(width_original * height_original * pixelSize);
     CHECK_ALLOCATION(verificationOutput,
                      "verificationOutput heap allocation failed!");
 
     // initialize the data to NULL
-    memset(verificationOutput, 0, width * height * pixelSize);
+	memset(verificationOutput, 0, width_original * height_original * pixelSize);
 
     return SDK_SUCCESS;
 
@@ -61,8 +54,11 @@ int
 EdgeDetector::writeOutputImage(std::string outputImageName)
 {
     // copy output image data back to original pixel data
-    memcpy(pixelData, outputImageData, width * height * pixelSize);
+	memcpy(pixelData, outputImageData,
+		width_original * height_original * pixelSize);
 
+	//inputBitmap.height = height;
+	//inputBitmap.width = width;
     // write the output bmp file
     if(!inputBitmap.write(outputImageName.c_str()))
     {
@@ -77,7 +73,7 @@ int
 EdgeDetector::genBinaryImage()
 {
     bifData binaryData;
-    binaryData.kernelName = std::string("EdgeDetector_Kernels.cl");
+    binaryData.kernelName = std::string(SOBEL_FILTER_KERNEL);
     binaryData.flagsStr = std::string("");
     if(sdkContext->isComplierFlagsSpecified())
     {
@@ -164,46 +160,52 @@ EdgeDetector::setupCL()
     inputImageBuffer = clCreateBuffer(
                            context,
                            inMemFlags,
-                           width * height * pixelSize,
+						   width_original * height_original * pixelSize,
                            0,
                            &status);
     CHECK_OPENCL_ERROR(status, "clCreateBuffer failed. (inputImageBuffer)");
 
     // Create memory objects for output Image
-    outputImageBuffer = clCreateBuffer(context,
-                                       CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR,
-                                       width * height * pixelSize,
-                                       outputImageData,
-                                       &status);
-    CHECK_OPENCL_ERROR(status, "clCreateBuffer failed. (outputImageBuffer)");
+
+	nextImageBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR | CL_MEM_COPY_HOST_PTR,
+		width_original * height_original * pixelSize, inputImageData, &status);
+
+	prevImageBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,
+		width_original * height_original * pixelSize, 0, &status);
+
+
+
+	thetaBuffer = clCreateBuffer(context,
+		CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,
+		width * height * pixelSize,0,&status);
 
     // create a CL program using the kernel source
-    buildProgramData buildData;
-    buildData.kernelName = std::string("SobelFilter_Kernels.cl");
-    buildData.devices = devices;
-    buildData.deviceId = sdkContext->deviceId;
-    buildData.flagsStr = std::string("");
+    buildProgramData buildDataGrey;
+	buildDataGrey.kernelName = std::string(GREYSCALE_KERNEL);
+	buildDataGrey.devices = devices;
+	buildDataGrey.deviceId = sdkContext->deviceId;
+	buildDataGrey.flagsStr = std::string("");
     if(sdkContext->isLoadBinaryEnabled())
     {
-        buildData.binaryName = std::string(sdkContext->loadBinary.c_str());
+		buildDataGrey.binaryName = std::string(sdkContext->loadBinary.c_str());
     }
 
     if(sdkContext->isComplierFlagsSpecified())
     {
-        buildData.flagsFileName = std::string(sdkContext->flags.c_str());
+		buildDataGrey.flagsFileName = std::string(sdkContext->flags.c_str());
     }
 
-    retValue = buildOpenCLProgram(program, context, buildData);
+	retValue = buildOpenCLProgram(programGrey, context, buildDataGrey);
     CHECK_ERROR(retValue, 0, "buildOpenCLProgram() failed");
 
     // get a kernel object handle for a kernel with the given name
-    kernel = clCreateKernel(
-                 program,
-                 "sobel_filter",
+    kernelGrey = clCreateKernel(
+				  programGrey,
+                 "greyscale_filter",
                  &status);
     CHECK_OPENCL_ERROR(status, "clCreateKernel failed.");
 
-    status = kernelInfo.setKernelWorkGroupInfo(kernel,
+	status = kernelInfo.setKernelWorkGroupInfo(kernelGrey,
              devices[sdkContext->deviceId]);
     CHECK_ERROR(status, SDK_SUCCESS,"kernelInfo.setKernelWorkGroupInfo() failed");
 
@@ -227,82 +229,458 @@ EdgeDetector::setupCL()
             blockSizeY = 1;
         }
     }
+
+	buildProgramData buildDataGaus;
+	buildDataGaus.kernelName = std::string(GAUSSIAN_KERNEL);
+	buildDataGaus.devices = devices;
+	buildDataGaus.deviceId = sdkContext->deviceId;
+	buildDataGaus.flagsStr = std::string("");
+	if (sdkContext->isLoadBinaryEnabled())
+	{
+		buildDataGaus.binaryName = std::string(sdkContext->loadBinary.c_str());
+	}
+
+	if (sdkContext->isComplierFlagsSpecified())
+	{
+		buildDataGaus.flagsFileName = std::string(sdkContext->flags.c_str());
+	}
+
+	retValue = buildOpenCLProgram(programGaus, context, buildDataGaus);
+	CHECK_ERROR(retValue, 0, "buildOpenCLProgram() failed");
+
+	// get a kernel object handle for a kernel with the given name
+	kernelGaus = clCreateKernel(
+		programGaus,
+		"gaussian_filter",
+		&status);
+	CHECK_OPENCL_ERROR(status, "clCreateKernel failed.");
+
+	status = kernelInfo.setKernelWorkGroupInfo(kernelGaus,
+		devices[sdkContext->deviceId]);
+	CHECK_ERROR(status, SDK_SUCCESS, "kernelInfo.setKernelWorkGroupInfo() failed");
+
+
+	if ((blockSizeX * blockSizeY) > kernelInfo.kernelWorkGroupSize)
+	{
+		if (!sdkContext->quiet)
+		{
+			std::cout << "Out of Resources!" << std::endl;
+			std::cout << "Group Size specified : "
+				<< blockSizeX * blockSizeY << std::endl;
+			std::cout << "Max Group Size supported on the kernel : "
+				<< kernelWorkGroupSize << std::endl;
+			std::cout << "Falling back to " << kernelInfo.kernelWorkGroupSize << std::endl;
+		}
+
+		// Three possible cases
+		if (blockSizeX > kernelInfo.kernelWorkGroupSize)
+		{
+			blockSizeX = kernelInfo.kernelWorkGroupSize;
+			blockSizeY = 1;
+		}
+	}
+
+	buildProgramData buildDataSobel;
+	buildDataSobel.kernelName = std::string(SOBEL_FILTER_KERNEL);
+	buildDataSobel.devices = devices;
+	buildDataSobel.deviceId = sdkContext->deviceId;
+	buildDataSobel.flagsStr = std::string("");
+	if (sdkContext->isLoadBinaryEnabled())
+	{
+		buildDataSobel.binaryName = std::string(sdkContext->loadBinary.c_str());
+	}
+
+	if (sdkContext->isComplierFlagsSpecified())
+	{
+		buildDataSobel.flagsFileName = std::string(sdkContext->flags.c_str());
+	}
+
+	retValue = buildOpenCLProgram(programSobel, context, buildDataSobel);
+	CHECK_ERROR(retValue, 0, "buildOpenCLProgram() failed");
+
+	// get a kernel object handle for a kernel with the given name
+	kernelSobel = clCreateKernel(
+		programSobel,
+		"sobel_filter",
+		&status);
+	CHECK_OPENCL_ERROR(status, "clCreateKernel failed.");
+
+	status = kernelInfo.setKernelWorkGroupInfo(kernelSobel,
+		devices[sdkContext->deviceId]);
+	CHECK_ERROR(status, SDK_SUCCESS, "kernelInfo.setKernelWorkGroupInfo() failed");
+
+
+	if ((blockSizeX * blockSizeY) > kernelInfo.kernelWorkGroupSize)
+	{
+		if (!sdkContext->quiet)
+		{
+			std::cout << "Out of Resources!" << std::endl;
+			std::cout << "Group Size specified : "
+				<< blockSizeX * blockSizeY << std::endl;
+			std::cout << "Max Group Size supported on the kernel : "
+				<< kernelWorkGroupSize << std::endl;
+			std::cout << "Falling back to " << kernelInfo.kernelWorkGroupSize << std::endl;
+		}
+
+		// Three possible cases
+		if (blockSizeX > kernelInfo.kernelWorkGroupSize)
+		{
+			blockSizeX = kernelInfo.kernelWorkGroupSize;
+			blockSizeY = 1;
+		}
+	}
+
+	buildProgramData buildDataMax;
+	buildDataMax.kernelName = std::string(MAX_KERNEL);
+	buildDataMax.devices = devices;
+	buildDataMax.deviceId = sdkContext->deviceId;
+	buildDataMax.flagsStr = std::string("");
+	if (sdkContext->isLoadBinaryEnabled())
+	{
+		buildDataMax.binaryName = std::string(sdkContext->loadBinary.c_str());
+	}
+
+	if (sdkContext->isComplierFlagsSpecified())
+	{
+		buildDataMax.flagsFileName = std::string(sdkContext->flags.c_str());
+	}
+
+	retValue = buildOpenCLProgram(programMax, context, buildDataMax);
+	CHECK_ERROR(retValue, 0, "buildOpenCLProgram() failed");
+
+	// get a kernel object handle for a kernel with the given name
+	kernelMax = clCreateKernel(
+		programMax,
+		"Max_filter",
+		&status);
+	CHECK_OPENCL_ERROR(status, "clCreateKernel failed.");
+
+	status = kernelInfo.setKernelWorkGroupInfo(kernelMax,
+		devices[sdkContext->deviceId]);
+	CHECK_ERROR(status, SDK_SUCCESS, "kernelInfo.setKernelWorkGroupInfo() failed");
+
+
+	if ((blockSizeX * blockSizeY) > kernelInfo.kernelWorkGroupSize)
+	{
+		if (!sdkContext->quiet)
+		{
+			std::cout << "Out of Resources!" << std::endl;
+			std::cout << "Group Size specified : "
+				<< blockSizeX * blockSizeY << std::endl;
+			std::cout << "Max Group Size supported on the kernel : "
+				<< kernelWorkGroupSize << std::endl;
+			std::cout << "Falling back to " << kernelInfo.kernelWorkGroupSize << std::endl;
+		}
+
+		// Three possible cases
+		if (blockSizeX > kernelInfo.kernelWorkGroupSize)
+		{
+			blockSizeX = kernelInfo.kernelWorkGroupSize;
+			blockSizeY = 1;
+		}
+	}
+
+
+	buildProgramData buildDataHyst;
+	buildDataHyst.kernelName = std::string(HYSTERESIS_KERNEL);
+	buildDataHyst.devices = devices;
+	buildDataHyst.deviceId = sdkContext->deviceId;
+	buildDataHyst.flagsStr = std::string("");
+	if (sdkContext->isLoadBinaryEnabled())
+	{
+		buildDataHyst.binaryName = std::string(sdkContext->loadBinary.c_str());
+	}
+
+	if (sdkContext->isComplierFlagsSpecified())
+	{
+		buildDataHyst.flagsFileName = std::string(sdkContext->flags.c_str());
+	}
+
+	retValue = buildOpenCLProgram(programHyst, context, buildDataHyst);
+	CHECK_ERROR(retValue, 0, "buildOpenCLProgram() failed");
+
+	// get a kernel object handle for a kernel with the given name
+	kernelHyst = clCreateKernel(
+		programHyst,
+		"Hyst_filter",
+		&status);
+	CHECK_OPENCL_ERROR(status, "clCreateKernel failed.");
+
+	status = kernelInfo.setKernelWorkGroupInfo(kernelHyst,
+		devices[sdkContext->deviceId]);
+	CHECK_ERROR(status, SDK_SUCCESS, "kernelInfo.setKernelWorkGroupInfo() failed");
+
+
+	if ((blockSizeX * blockSizeY) > kernelInfo.kernelWorkGroupSize)
+	{
+		if (!sdkContext->quiet)
+		{
+			std::cout << "Out of Resources!" << std::endl;
+			std::cout << "Group Size specified : "
+				<< blockSizeX * blockSizeY << std::endl;
+			std::cout << "Hyst Group Size supported on the kernel : "
+				<< kernelWorkGroupSize << std::endl;
+			std::cout << "Falling back to " << kernelInfo.kernelWorkGroupSize << std::endl;
+		}
+
+		// Three possible cases
+		if (blockSizeX > kernelInfo.kernelWorkGroupSize)
+		{
+			blockSizeX = kernelInfo.kernelWorkGroupSize;
+			blockSizeY = 1;
+		}
+	}
     return SDK_SUCCESS;
 }
 
+
+int EdgeDetector::GreyScale()
+{
+	cl_int status;
+
+	// Set input data
+
+	// Set appropriate arguments to the kernel
+
+	// input buffer image
+	status = clSetKernelArg(
+		kernelGrey,
+		0,
+		sizeof(cl_mem),
+		&nextImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (nextImageBuffer)")
+
+		// outBuffer imager
+		status = clSetKernelArg(
+		kernelGrey,
+		1,
+		sizeof(cl_mem),
+		&prevImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (prevImageBuffer");
+
+	// Enqueue a kernel run call.
+	size_t globalThreads[] = { width, height };
+	size_t localThreads[] = { blockSizeX, blockSizeY };
+
+	cl_event ndrEvt;
+	status = clEnqueueNDRangeKernel(
+		commandQueue,
+		kernelGrey,
+		2,
+		NULL,
+		globalThreads,
+		localThreads,
+		0,
+		NULL,
+		&ndrEvt);
+	CHECK_OPENCL_ERROR(status, "clEnqueueNDRangeKernel failed.");
+
+	return 1;
+}
+
+int EdgeDetector::Gaussian()
+{
+	cl_int status;
+
+	// Set input data
+
+	// Set appropriate arguments to the kernel
+
+	// input buffer image
+	status = clSetKernelArg(
+		kernelGaus,
+		0,
+		sizeof(cl_mem),
+		&prevImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (PrevBuff())")
+
+		// outBuffer imager
+		status = clSetKernelArg(
+		kernelGaus,
+		1,
+		sizeof(cl_mem),
+		&nextImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (outputImageBuffer)");
+
+	// Enqueue a kernel run call.
+	size_t globalThreads[] = { width, height };
+	size_t localThreads[] = { blockSizeX, blockSizeY };
+
+	cl_event ndrEvt;
+	status = clEnqueueNDRangeKernel(
+		commandQueue,
+		kernelGaus,
+		2,
+		NULL,
+		globalThreads,
+		localThreads,
+		0,
+		NULL,
+		&ndrEvt);
+	CHECK_OPENCL_ERROR(status, "clEnqueueNDRangeKernel failed.");
+	return 1;
+}
+
+int EdgeDetector::Sobel()
+{
+	cl_int status;
+
+	// Set input data
+
+	// Set appropriate arguments to the kernel
+
+	// input buffer image
+	status = clSetKernelArg(
+		kernelSobel,
+		0,
+		sizeof(cl_mem),
+		&nextImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (inputImageBuffer)")
+
+		// outBuffer imager
+		status = clSetKernelArg(
+		kernelSobel,
+		1,
+		sizeof(cl_mem),
+		&prevImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (outputImageBuffer)");
+
+	status = clSetKernelArg(
+		kernelSobel,
+		2,
+		sizeof(cl_mem),
+		&thetaBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (thetaBuffer)");
+
+	// Enqueue a kernel run call.
+	size_t globalThreads[] = { width, height };
+	size_t localThreads[] = { blockSizeX, blockSizeY };
+	std::cout << "Width " << width << std::endl;
+	std::cout << "height " << height << std::endl;
+	cl_event ndrEvt;
+	status = clEnqueueNDRangeKernel(
+		commandQueue,
+		kernelSobel,
+		2,
+		NULL,
+		globalThreads,
+		localThreads,
+		0,
+		NULL,
+		&ndrEvt);
+
+	CHECK_OPENCL_ERROR(status, "clEnqueueNDRangeKernel failed.");
+	return 1;
+}
+
+int EdgeDetector::Max()
+{
+	cl_int status;
+
+	// Set input data
+
+	// Set appropriate arguments to the kernel
+
+	// input buffer image
+	status = clSetKernelArg(
+		kernelMax,
+		0,
+		sizeof(cl_mem),
+		&prevImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (inputImageBuffer)")
+
+		// outBuffer imager
+		status = clSetKernelArg(
+		kernelMax,
+		1,
+		sizeof(cl_mem),
+		&nextImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (outputImageBuffer)");
+
+	status = clSetKernelArg(
+		kernelMax,
+		2,
+		sizeof(cl_mem),
+		&thetaBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (thetaBuffer)");
+
+	// Enqueue a kernel run call.
+	size_t globalThreads[] = { width, height };
+	size_t localThreads[] = { blockSizeX, blockSizeY };
+
+	cl_event ndrEvt;
+	status = clEnqueueNDRangeKernel(
+		commandQueue,
+		kernelMax,
+		2,
+		NULL,
+		globalThreads,
+		localThreads,
+		0,
+		NULL,
+		&ndrEvt);
+	CHECK_OPENCL_ERROR(status, "clEnqueueNDRangeKernel failed.");
+	return 1;
+}
+int EdgeDetector::Hysteresis()
+{
+	cl_int status;
+
+
+	// Set appropriate arguments to the kernel
+
+	// input buffer image
+	status = clSetKernelArg(
+		kernelHyst,
+		0,
+		sizeof(cl_mem),
+		&nextImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (inputImageBuffer)")
+
+		
+		// outBuffer imager
+		status = clSetKernelArg(
+		kernelHyst,
+		1,
+		sizeof(cl_mem),
+		&prevImageBuffer);
+
+	CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (outputImageBuffer)");
+
+	// Enqueue a kernel run call.
+	size_t globalThreads[] = { width, height };
+	size_t localThreads[] = { blockSizeX, blockSizeY };
+
+	cl_event ndrEvt;
+	status = clEnqueueNDRangeKernel(
+		commandQueue,
+		kernelHyst,
+		2,
+		NULL,
+		globalThreads,
+		localThreads,
+		0,
+		NULL,
+		&ndrEvt);
+	CHECK_OPENCL_ERROR(status, "clEnqueueNDRangeKernel failed.");
+	return 1;
+}
 int
 EdgeDetector::runCLKernels()
 {
-    cl_int status;
-
-    // Set input data
-    cl_event writeEvt;
-    status = clEnqueueWriteBuffer(
-                 commandQueue,
-                 inputImageBuffer,
-                 CL_FALSE,
-                 0,
-                 width * height * pixelSize,
-                 inputImageData,
-                 0,
-                 NULL,
-                 &writeEvt);
-    CHECK_OPENCL_ERROR(status, "clEnqueueWriteBuffer failed. (inputImageBuffer)");
-
-    status = clFlush(commandQueue);
-    CHECK_OPENCL_ERROR(status, "clFlush failed.");
-
-    status = waitForEventAndRelease(&writeEvt);
-    CHECK_ERROR(status, SDK_SUCCESS, "WaitForEventAndRelease(writeEvt) Failed");
-
-    // Set appropriate arguments to the kernel
-
-    // input buffer image
-    status = clSetKernelArg(
-                 kernel,
-                 0,
-                 sizeof(cl_mem),
-                 &inputImageBuffer);
-    CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (inputImageBuffer)")
-
-    // outBuffer imager
-    status = clSetKernelArg(
-                 kernel,
-                 1,
-                 sizeof(cl_mem),
-                 &outputImageBuffer);
-    CHECK_OPENCL_ERROR(status, "clSetKernelArg failed. (outputImageBuffer)");
-
-    // Enqueue a kernel run call.
-    size_t globalThreads[] = {width, height};
-    size_t localThreads[] = {blockSizeX, blockSizeY};
-
-    cl_event ndrEvt;
-    status = clEnqueueNDRangeKernel(
-                 commandQueue,
-                 kernel,
-                 2,
-                 NULL,
-                 globalThreads,
-                 localThreads,
-                 0,
-                 NULL,
-                 &ndrEvt);
-    CHECK_OPENCL_ERROR(status, "clEnqueueNDRangeKernel failed.");
-
-    status = clFlush(commandQueue);
-    CHECK_OPENCL_ERROR(status, "clFlush failed.");
-
-    status = waitForEventAndRelease(&ndrEvt);
-    CHECK_ERROR(status, SDK_SUCCESS, "WaitForEventAndRelease(ndrEvt) Failed");
-
+	cl_int status;
+	EdgeDetector::GreyScale();
+	EdgeDetector::Gaussian();
+	EdgeDetector::Sobel();
+	EdgeDetector::Max();
+	EdgeDetector::Hysteresis();
 
     // Enqueue readBuffer
     cl_event readEvt;
     status = clEnqueueReadBuffer(
                  commandQueue,
-                 outputImageBuffer,
-                 CL_FALSE,
+                 prevImageBuffer,
+                 CL_TRUE,
                  0,
                  width * height * pixelSize,
                  outputImageData,
@@ -433,17 +811,44 @@ EdgeDetector::cleanup()
     // Releases OpenCL resources (Context, Memory etc.)
     cl_int status;
 
-    status = clReleaseKernel(kernel);
+    status = clReleaseKernel(kernelGrey);
     CHECK_OPENCL_ERROR(status, "clReleaseKernel failed.");
 
-    status = clReleaseProgram(program);
+    status = clReleaseProgram(programGrey);
     CHECK_OPENCL_ERROR(status, "clReleaseProgram failed.");
+
+	status = clReleaseProgram(programGaus);
+	CHECK_OPENCL_ERROR(status, "clReleaseProgram failed.");
+
+	status = clReleaseKernel(kernelGaus);
+	CHECK_OPENCL_ERROR(status, "clReleaseKernel failed.");
+
+	status = clReleaseProgram(programSobel);
+	CHECK_OPENCL_ERROR(status, "clReleaseProgram failed.");
+
+	status = clReleaseKernel(kernelSobel);
+	CHECK_OPENCL_ERROR(status, "clReleaseKernel failed.");
+
+	status = clReleaseProgram(programMax);
+	CHECK_OPENCL_ERROR(status, "clReleaseProgram failed.");
+
+	status = clReleaseKernel(kernelMax);
+	CHECK_OPENCL_ERROR(status, "clReleaseKernel failed.");
+
+	status = clReleaseProgram(programHyst);
+	CHECK_OPENCL_ERROR(status, "clReleaseProgram failed.");
+
+	status = clReleaseKernel(kernelHyst);
+	CHECK_OPENCL_ERROR(status, "clReleaseKernel failed.");
 
     status = clReleaseMemObject(inputImageBuffer);
     CHECK_OPENCL_ERROR(status, "clReleaseMemObject failed.");
 
-    status = clReleaseMemObject(outputImageBuffer);
+    status = clReleaseMemObject(nextImageBuffer);
     CHECK_OPENCL_ERROR(status, "clReleaseMemObject failed.");
+
+	status = clReleaseMemObject(prevImageBuffer);
+	CHECK_OPENCL_ERROR(status, "clReleaseMemObject failed.");
 
     status = clReleaseCommandQueue(commandQueue);
     CHECK_OPENCL_ERROR(status, "clReleaseCommandQueue failed.");
@@ -455,6 +860,8 @@ EdgeDetector::cleanup()
     FREE(inputImageData);
 
     FREE(outputImageData);
+
+	//FREE(nextImageData);
 
     FREE(verificationOutput);
 
@@ -538,7 +945,7 @@ EdgeDetector::EdgeDetectorCPUReference()
     free(ptr);
 }
 
-
+/*
 int
 EdgeDetector::verifyResults()
 {
@@ -596,7 +1003,7 @@ EdgeDetector::verifyResults()
 
     return SDK_SUCCESS;
 }
-
+*/
 void
 EdgeDetector::printStats()
 {
@@ -622,49 +1029,3 @@ EdgeDetector::printStats()
     }
 }
 
-
-int
-main(int argc, char * argv[])
-{
-    cl_int status = 0;
-    EdgeDetector clEdgeDetector;
-
-    if(clEdgeDetector.initialize() != SDK_SUCCESS)
-    {
-        return SDK_FAILURE;
-    }
-
-    if(clEdgeDetector.sdkContext->parseCommandLine(argc, argv) != SDK_SUCCESS)
-    {
-        return SDK_FAILURE;
-    }
-
-    if(clEdgeDetector.sdkContext->isDumpBinaryEnabled())
-    {
-        return clEdgeDetector.genBinaryImage();
-    }
-
-    status = clEdgeDetector.setup();
-    if(status != SDK_SUCCESS)
-    {
-        return status;
-    }
-
-    if(clEdgeDetector.run() != SDK_SUCCESS)
-    {
-        return SDK_FAILURE;
-    }
-
-    if(clEdgeDetector.verifyResults() != SDK_SUCCESS)
-    {
-        return SDK_FAILURE;
-    }
-
-    if(clEdgeDetector.cleanup() != SDK_SUCCESS)
-    {
-        return SDK_FAILURE;
-    }
-
-    clEdgeDetector.printStats();
-    return SDK_SUCCESS;
-}
