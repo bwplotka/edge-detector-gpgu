@@ -51,9 +51,7 @@
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\IntelOpenCL.props" />
-  </ImportGroup>
+  <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -241,14 +239,12 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
     <Text Include="CMakeLists.txt" />
   </ItemGroup>
   <ItemGroup>
-    <Intel_OpenCL_Build_Rules Include="kernels\Gaussian_Kernels.cl" />
-    <Intel_OpenCL_Build_Rules Include="kernels\GreyScale_Kernels.cl" />
-    <Intel_OpenCL_Build_Rules Include="kernels\Hysteresis_Kernels.cl" />
-    <Intel_OpenCL_Build_Rules Include="kernels\Max_Kernels.cl" />
-    <Intel_OpenCL_Build_Rules Include="kernels\SobelFilter_Kernels.cl" />
+    <none Include="kernels\Gaussian_Kernels.cl" />
+    <none Include="kernels\GreyScale_Kernels.cl" />
+    <none Include="kernels\Hysteresis_Kernels.cl" />
+    <none Include="kernels\Max_Kernels.cl" />
+    <none Include="kernels\SobelFilter_Kernels.cl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\IntelOpenCL.targets" />
-  </ImportGroup>
+  <ImportGroup Label="ExtensionTargets" />
 </Project>
