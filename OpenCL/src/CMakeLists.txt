@@ -16,9 +16,9 @@
 
 
 set( SAMPLE_NAME EdgeDetector )
-set( SOURCE_FILES EdgeDetector.cpp )
-set( EXTRA_FILES SobelFilter_Kernels.cl Input_Image.bmp )
-
+set( SOURCE_FILES main.cpp )
+set( KERNEL_PATH kernels)
+set( EXTRA_FILES ${KERNEL_PATH}/SobelFilter_Kernels.cl ${KERNEL_PATH}/Gaussian_Kernels.cl ${KERNEL_PATH}/Max_Kernels.cl ${KERNEL_PATH}/Hysteresis_Kernels.cl Input_Image.bmp )
 ############################################################################
 
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
@@ -111,7 +111,7 @@ set( ADDITIONAL_LIBRARIES "" )
 file(GLOB INCLUDE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h" )
 include_directories( ${OPENCL_INCLUDE_DIRS}  ../include/AMDSDKUtil )
 
-add_executable( ${SAMPLE_NAME} ${SOURCE_FILES} ${INCLUDE_FILES} ${EXTRA_FILES})
+add_executable( ${SAMPLE_NAME} ${SOURCE_FILES} ${INCLUDE_FILES} ${EXTRA_FILES} EdgeDetector.cpp)
 
 # gcc/g++ specific compile options
 if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
@@ -168,6 +168,8 @@ foreach( extra_file ${EXTRA_FILES} )
         ${CMAKE_CURRENT_SOURCE_DIR}/${extra_file}  ./
         )
 endforeach( extra_file )
+
+file(COPY  ${CMAKE_CURRENT_SOURCE_DIR}/kernels DESTINATION  ${EXECUTABLE_OUTPUT_PATH})
 
 # Group sample based on FOLDER_GROUP defined in parent folder
 if( FOLDER_GROUP )
