@@ -18,7 +18,8 @@
 set( SAMPLE_NAME EdgeDetector )
 set( SOURCE_FILES main.cpp )
 set( KERNEL_PATH kernels)
-set( EXTRA_FILES ${KERNEL_PATH}/SobelFilter_Kernels.cl ${KERNEL_PATH}/Gaussian_Kernels.cl ${KERNEL_PATH}/Max_Kernels.cl ${KERNEL_PATH}/Hysteresis_Kernels.cl Input_Image.bmp )
+set( INPUT_IMAGE Input_Image.bmp)
+set( EXTRA_FILES ${KERNEL_PATH}/SobelFilter_Kernels.cl ${KERNEL_PATH}/Gaussian_Kernels.cl ${KERNEL_PATH}/Max_Kernels.cl ${KERNEL_PATH}/Hysteresis_Kernels.cl )
 ############################################################################
 
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
@@ -159,17 +160,17 @@ else()
 endif()
 
 # Copy extra files to binary directory
-foreach( extra_file ${EXTRA_FILES} )
-    add_custom_command(
+#foreach( extra_file ${EXTRA_FILES} )
+ add_custom_command(
         TARGET ${SAMPLE_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_SOURCE_DIR}/${extra_file}  ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_SOURCE_DIR}/${extra_file}  ./
-        )
-endforeach( extra_file )
+        ${CMAKE_CURRENT_SOURCE_DIR}/${INPUT_IMAGE}  ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+   ${CMAKE_CURRENT_SOURCE_DIR}/${INPUT_IMAGE}  ./
+)
+#endforeach( extra_file )
 
-file(COPY  ${CMAKE_CURRENT_SOURCE_DIR}/kernels DESTINATION  ${EXECUTABLE_OUTPUT_PATH})
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/kernels DESTINATION  ${EXECUTABLE_OUTPUT_PATH})
 
 # Group sample based on FOLDER_GROUP defined in parent folder
 if( FOLDER_GROUP )
