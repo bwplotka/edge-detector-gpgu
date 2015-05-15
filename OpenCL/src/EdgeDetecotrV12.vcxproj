@@ -222,7 +222,6 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="EdgeDetector.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -235,10 +234,9 @@ copy SobelFilter_Input.bmp "$(OutDir)SobelFilter_Input.bmp" /Y
     <none Include="kernels\Hysteresis_Kernels.cl" />
     <none Include="kernels\Max_Kernels.cl" />
     <none Include="kernels\SobelFilter_Kernels.cl" />
-    <None Include="SobelFilter_Input.bmp" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="big.bmp" />
+    <Image Include="Input_Image.bmp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="CMakeLists.txt" />
