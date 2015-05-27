@@ -6,10 +6,11 @@
 
 #define LOG1(X,Y) {printf(X,Y); fflush(stdout); }
 #define LOG(X) {printf(X); fflush(stdout); }
-#define COMPUTE_TAG 0
-#define FINISH_TAG 1
+#define COMPUTE_TAG 1
+#define FINISH_TAG 0
 
 #define MPI_GROUP_SIZE 256
+#define SAFE_PX 0
 
 #define DEBUG
 
@@ -17,13 +18,14 @@
 #define DBGLOG(X) printf(X); fflush(stdout)
 #define DBGLOG1(X, Y) printf(X,Y); fflush(stdout)
 #define DBGLOG2(X, Y, Y1) printf(X,Y,Y1); fflush(stdout) 
+#define DBGLOG3(X, Y, Y1,Y3) printf(X,Y,Y1,Y3); fflush(stdout) 
 #define DBGLOG5(X, Y, Y2, Y3, Y4, Y5) printf(X,Y, Y2, Y3, Y4, Y5); fflush(stdout)
 #else
 #define DBGLOG(X, Y) {}
 #endif
 
 struct WorkChunk {
-	uchar4 px[MPI_GROUP_SIZE*MPI_GROUP_SIZE];
+	uchar4 px[(MPI_GROUP_SIZE + SAFE_PX)*(MPI_GROUP_SIZE + SAFE_PX)];
 	int id;
 };
 
@@ -64,15 +66,16 @@ writeOutputImage(SDKBitMap* inputBitmap, std::string outputImageName)
 	return SDK_SUCCESS;
 }
 
-int compute_edges(EdgeDetector clEdgeDetector, WorkChunk* work_chunk){
+int compute_edges(EdgeDetector clEdgeDetector, WorkChunk* work_chunk, unsigned int dyn_group_size){
 	cl_int status = 0;
 
 	if (clEdgeDetector.sdkContext->isDumpBinaryEnabled())
 	{
 		return clEdgeDetector.genBinaryImage();
 	}
-
-	status = clEdgeDetector.readInputImage(work_chunk->px, MPI_GROUP_SIZE, MPI_GROUP_SIZE);
+	unsigned short w = dyn_group_size >> 16;
+	unsigned short h = dyn_group_size & 0x0000FFFF;
+	status = clEdgeDetector.readInputImage(work_chunk->px, h + SAFE_PX, w + SAFE_PX);
 	CHECK_ERROR(status, SDK_SUCCESS, "Read InputImage failed\n");
 
 	status = clEdgeDetector.setup();
@@ -108,6 +111,9 @@ int run_process(int my_id, int all_processes) {
 	cl_uint height_parts;
 	cl_uint width_parts;
 	SDKBitMap inputImage;
+	short dyn_group_w = MPI_GROUP_SIZE;
+	short dyn_group_h = MPI_GROUP_SIZE;
+	
 	//CUSTOM MPI DATATYPES--------
 	//construct uchar4 Type:
 	const int nitems = 4;
@@ -124,7 +130,7 @@ int run_process(int my_id, int all_processes) {
 	MPI_Type_commit(&mpi_uchar4_type);
 	//construct WorkChunk Type:
 	const int nitems2 = 2;
-	int          blocklengths2[2] = { MPI_GROUP_SIZE*MPI_GROUP_SIZE, 1 };
+	int          blocklengths2[2] = { (dyn_group_w + SAFE_PX)*(dyn_group_h + SAFE_PX), 1 };
 	MPI_Datatype types2[2] = { mpi_uchar4_type, MPI_INT };
 	MPI_Datatype mpi_workchunk_type;
 	MPI_Aint     offsets2[2];
@@ -163,13 +169,28 @@ int run_process(int my_id, int all_processes) {
 		// get width and height of input image
 		height_original = inputImage.getHeight();
 		width_original = inputImage.getWidth();
-		//For now - static group size - TODO: Calculate proper group size dynamically!
-		height_parts = ((height_original) / MPI_GROUP_SIZE);
-		height = height_parts * MPI_GROUP_SIZE;
-		width_parts = ((width_original) / MPI_GROUP_SIZE);
-		width = width_parts * MPI_GROUP_SIZE;
+		DBGLOG2("Orig: h(%d), w(%d) \n", height_original, width_original);
+		//Make sure it mod 16
+		height = ((height_original) / GROUP_SIZE) * GROUP_SIZE;
+		width = ((width_original) / GROUP_SIZE) * GROUP_SIZE;
+		//Probujemy dzielic na jak najwieksze bloki. Dla niestandardowego obrazka bedzie stypa bo moze byc duzo chunkow po 16px
+		while (dyn_group_h != GROUP_SIZE){
+			//printf("%d, %d\n", dyn_group_h, height);
+			if (height % dyn_group_h != 0) dyn_group_h -= GROUP_SIZE;
+			else break;
+		}
+		while (dyn_group_w != GROUP_SIZE){
+			if (width % dyn_group_w != 0) dyn_group_w -= GROUP_SIZE;
+			else break;
+		}
+
+		height_parts = ((height) / dyn_group_h);
+		width_parts = ((width) / dyn_group_w);
 		chunks_todo = width_parts * height_parts;
 		DBGLOG5("Loaded image h(%d), w(%d) - w parts (%d), h parts (%d), chunks (%d)\n", height, width, height_parts, width_parts, chunks_todo);
+		DBGLOG2("Dynamic size approx: h(%d), w(%d)\n", dyn_group_h, dyn_group_w);
+
+		unsigned int combined_dyn_group = (dyn_group_w << 16) | dyn_group_h;
 		pixelData = inputImage.getPixels();
 		if (pixelData == NULL)
 		{
@@ -177,31 +198,34 @@ int run_process(int my_id, int all_processes) {
 			return SDK_FAILURE;
 		}
 		int checkpointed_chunks = 0;
-		//Main loop - on each iteration give some chunks to 
+		//Main loop - on each iteration give some chunks to compute
 		while (chunk_id < chunks_todo){
 			for (int i = 1; i < all_processes && chunk_id < chunks_todo; chunk_id++, i++){
 				WorkChunk todo_chunk;
 				todo_chunk.id = chunk_id;
-				for (int x = 0; x < MPI_GROUP_SIZE*MPI_GROUP_SIZE; x++){
-					//Need to fine tune - one pixel stays
-					int yA = ((chunk_id / width_parts)*MPI_GROUP_SIZE) + (x / MPI_GROUP_SIZE);
-					int xA = ((chunk_id % width_parts)*MPI_GROUP_SIZE) + (x % MPI_GROUP_SIZE);
+				for (int x = 0, a = (dyn_group_w + SAFE_PX)*(SAFE_PX / 2); x < dyn_group_h*dyn_group_w; x++, a++){
+					if (a % (dyn_group_w + SAFE_PX) == 0 || a % (dyn_group_w + SAFE_PX) == dyn_group_w + (SAFE_PX / 2) - 1) a += SAFE_PX / 2;
+					int yA = ((chunk_id / width_parts)*dyn_group_h) + (x / dyn_group_w);
+					int xA = ((chunk_id % width_parts)*dyn_group_w) + (x % dyn_group_w);
 					//DBGLOG2("(%d , %d) \n ", xA, yA);
-					todo_chunk.px[x] = pixelData[(yA*width) + xA];
+					todo_chunk.px[a] = pixelData[(yA*width) + xA];
 				}
 
-				MPI_Send(&todo_chunk, 1, mpi_workchunk_type, i, COMPUTE_TAG, MPI_COMM_WORLD);
-				MPI_Irecv(&outputChunks[i-1], 1, mpi_workchunk_type, i, COMPUTE_TAG, MPI_COMM_WORLD, &requests[i - 1]);
-				DBGLOG2("\nSend todo chunk (id = %d/%d)", chunk_id, chunks_todo);
+				MPI_Send(&todo_chunk, 1, mpi_workchunk_type, i, combined_dyn_group, MPI_COMM_WORLD);
+				MPI_Irecv(&outputChunks[i - 1], 1, mpi_workchunk_type, i, COMPUTE_TAG, MPI_COMM_WORLD, &requests[i - 1]);
+				DBGLOG3("\nSend todo chunk id = %d (%d/%d)", chunk_id, chunk_id + 1, chunks_todo);
 			}
 			
 			MPI_Waitall(chunk_id - checkpointed_chunks, requests, MPI_STATUSES_IGNORE);
 			for (int i = 1; i <= chunk_id - checkpointed_chunks; i++){
 				DBGLOG2("\nGot work output from process %d - chunk %d", i, outputChunks[i-1].id);
-				for (int x = 0; x < MPI_GROUP_SIZE*MPI_GROUP_SIZE; x++){
-					int yA = ((outputChunks[i - 1].id / width_parts)*MPI_GROUP_SIZE) + (x / MPI_GROUP_SIZE);
-					int xA = ((outputChunks[i - 1].id % width_parts)*MPI_GROUP_SIZE) + (x % MPI_GROUP_SIZE);
-					pixelData[(yA*width) + xA] = outputChunks[i - 1].px[x];
+				for (int x = 0, a = (dyn_group_w + SAFE_PX)*(SAFE_PX / 2); x < dyn_group_h*dyn_group_w; x++, a++){
+					if (a % (dyn_group_w + SAFE_PX) == 0 || a % (dyn_group_w + SAFE_PX) == dyn_group_w + (SAFE_PX / 2) - 1) a += SAFE_PX / 2;
+					//if (a / (MPI_GROUP_SIZE + 1) == 0 || a / (MPI_GROUP_SIZE + 1) == MPI_GROUP_SIZE) a++;
+					int yA = ((outputChunks[i - 1].id / width_parts)*dyn_group_h) + (x / dyn_group_w);
+					int xA = ((outputChunks[i - 1].id % width_parts)*dyn_group_w) + (x % dyn_group_w);
+					pixelData[(yA*width) + xA] = outputChunks[i - 1].px[a];
+					
 				}
 			}
 			checkpointed_chunks = chunk_id;
@@ -216,7 +240,7 @@ int run_process(int my_id, int all_processes) {
 		for (int i = 1; i < all_processes; i++){
 			MPI_Send(0, 0, mpi_workchunk_type, i, FINISH_TAG, MPI_COMM_WORLD);
 		}
-		FREE(requests);
+		//FREE(requests);
 		return SDK_SUCCESS;
 	}
 
@@ -250,7 +274,7 @@ int run_process(int my_id, int all_processes) {
 		if (r_status.MPI_TAG == FINISH_TAG) break;
 		DBGLOG2("W %d, got chunk id= %d", my_id, chunk->id);
 		//TODO fine tune edges!
-		if (compute_edges(clEdgeDetector, chunk) == SDK_FAILURE){
+		if (compute_edges(clEdgeDetector, chunk, r_status.MPI_TAG) == SDK_FAILURE){
 			LOG1("W: %d - error during edge computing!", my_id)
 		}
 		chunk->px[2].x = 44;
