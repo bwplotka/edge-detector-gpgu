@@ -128,7 +128,7 @@ copy Input_Image.bmp "$(OutDir)Input_Image.bmp" /Y
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Intel\INDE\code_builder_5.1.0.25\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files %28x86%29\AMD APP SDK\2.9-1\lib\x86_64;C:\Intel\INDE\code_builder_5.1.0.25\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib;OpenCL.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <ImportLibrary>$(SolutionDir)bin/x86_64/Debug/SobelFilter.lib</ImportLibrary>

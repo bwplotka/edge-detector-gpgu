@@ -16,7 +16,7 @@ using namespace appsdk;
 #define SOBEL_FILTER_KERNEL "kernels/SobelFilter_Kernels.cl"
 
 //#define INPUT_IMAGE "tiger.bmp"
-#define INPUT_IMAGE "Input_Image.bmp"
+#define INPUT_IMAGE "Bez.bmp"
 #define OUTPUT_IMAGE "Output_Image1.bmp"
 
 #define GROUP_SIZE 16
