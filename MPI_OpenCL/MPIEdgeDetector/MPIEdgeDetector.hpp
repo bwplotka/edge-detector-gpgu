@@ -93,6 +93,11 @@ int compute_edges(EdgeDetector clEdgeDetector, WorkChunk* work_chunk, unsigned i
 	status = clEdgeDetector.writeOutputImage(work_chunk->px);
 	CHECK_ERROR(status, SDK_SUCCESS, "write Output Image Failed\n");
 
+	if (clEdgeDetector.cleanup() != SDK_SUCCESS)
+	{
+		return SDK_FAILURE;
+	}
+
 	return SDK_SUCCESS;
 }
 
