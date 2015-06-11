@@ -10,8 +10,10 @@
 #define FINISH_TAG 0
 
 #define MPI_GROUP_SIZE 256
-#define SAFE_PX 0
 
+#define SAFE_LVL 1 
+
+#define SAFE_PX GROUP_SIZE*SAFE_LVL
 #define DEBUG
 
 #ifdef DEBUG 
@@ -19,6 +21,7 @@
 #define DBGLOG1(X, Y) printf(X,Y); fflush(stdout)
 #define DBGLOG2(X, Y, Y1) printf(X,Y,Y1); fflush(stdout) 
 #define DBGLOG3(X, Y, Y1,Y3) printf(X,Y,Y1,Y3); fflush(stdout) 
+#define DBGLOG4(X, Y, Y1,Y2, Y3) printf(X,Y,Y1,Y2,Y3); fflush(stdout) 
 #define DBGLOG5(X, Y, Y2, Y3, Y4, Y5) printf(X,Y, Y2, Y3, Y4, Y5); fflush(stdout)
 #else
 #define DBGLOG(X, Y) {}
@@ -191,12 +194,15 @@ int run_process(int my_id, int all_processes) {
 
 		height_parts = ((height) / dyn_group_h);
 		width_parts = ((width) / dyn_group_w);
-		chunks_todo = width_parts * height_parts;
+		chunks_todo =  width_parts * height_parts;
 		DBGLOG5("Loaded image h(%d), w(%d) - w parts (%d), h parts (%d), chunks (%d)\n", height, width, height_parts, width_parts, chunks_todo);
 		DBGLOG2("Dynamic size approx: h(%d), w(%d)\n", dyn_group_h, dyn_group_w);
 
 		unsigned int combined_dyn_group = (dyn_group_w << 16) | dyn_group_h;
 		pixelData = inputImage.getPixels();
+		uchar4* pixelDataReadOnly = (uchar4*)malloc(width_original * height_original * sizeof(cl_uchar4));
+		// Copy pixel data into inputImageData
+		memcpy(pixelDataReadOnly, pixelData, width_original * height_original * sizeof(cl_uchar4));
 		if (pixelData == NULL)
 		{
 			std::cout << "Failed to read pixel Data!\n";
@@ -208,14 +214,20 @@ int run_process(int my_id, int all_processes) {
 			for (int i = 1; i < all_processes && chunk_id < chunks_todo; chunk_id++, i++){
 				WorkChunk todo_chunk;
 				todo_chunk.id = chunk_id;
-				for (int x = 0, a = (dyn_group_w + SAFE_PX)*(SAFE_PX / 2); x < dyn_group_h*dyn_group_w; x++, a++){
-					if (a % (dyn_group_w + SAFE_PX) == 0 || a % (dyn_group_w + SAFE_PX) == dyn_group_w + (SAFE_PX / 2) - 1) a += SAFE_PX / 2;
-					int yA = ((chunk_id / width_parts)*dyn_group_h) + (x / dyn_group_w);
-					int xA = ((chunk_id % width_parts)*dyn_group_w) + (x % dyn_group_w);
-					//DBGLOG2("(%d , %d) \n ", xA, yA);
-					todo_chunk.px[a] = pixelData[(yA*width) + xA];
+				for (int x = 0; x < (dyn_group_h + SAFE_PX)*(dyn_group_w + SAFE_PX); x++){
+					int yA = ((chunk_id / width_parts)*(dyn_group_h)) + (x / (dyn_group_w + SAFE_PX));
+					int xA = ((chunk_id % width_parts)*(dyn_group_w )) + (x % (dyn_group_w + SAFE_PX));
+					yA -= SAFE_PX / 2;
+					xA -= SAFE_PX / 2;
+					//DBGLOG3("(x=%d, xA=%d, yA=%d, a=%d) \n ", x, xA, yA);
+					if (yA < 0) yA = 0;
+					if (yA > height-1) yA=height-1;
+					if (xA < 0) xA = 0;
+					if (xA > width-1) xA = width-1;
+					todo_chunk.px[x] = pixelDataReadOnly[(yA*width) + xA];
+					//if (x==50) getchar();
 				}
-
+				
 				MPI_Send(&todo_chunk, 1, mpi_workchunk_type, i, combined_dyn_group, MPI_COMM_WORLD);
 				MPI_Irecv(&outputChunks[i - 1], 1, mpi_workchunk_type, i, COMPUTE_TAG, MPI_COMM_WORLD, &requests[i - 1]);
 				DBGLOG3("\nSend todo chunk id = %d (%d/%d)", chunk_id, chunk_id + 1, chunks_todo);
@@ -224,13 +236,13 @@ int run_process(int my_id, int all_processes) {
 			MPI_Waitall(chunk_id - checkpointed_chunks, requests, MPI_STATUSES_IGNORE);
 			for (int i = 1; i <= chunk_id - checkpointed_chunks; i++){
 				DBGLOG2("\nGot work output from process %d - chunk %d", i, outputChunks[i-1].id);
-				for (int x = 0, a = (dyn_group_w + SAFE_PX)*(SAFE_PX / 2); x < dyn_group_h*dyn_group_w; x++, a++){
-					if (a % (dyn_group_w + SAFE_PX) == 0 || a % (dyn_group_w + SAFE_PX) == dyn_group_w + (SAFE_PX / 2) - 1) a += SAFE_PX / 2;
-					//if (a / (MPI_GROUP_SIZE + 1) == 0 || a / (MPI_GROUP_SIZE + 1) == MPI_GROUP_SIZE) a++;
-					int yA = ((outputChunks[i - 1].id / width_parts)*dyn_group_h) + (x / dyn_group_w);
-					int xA = ((outputChunks[i - 1].id % width_parts)*dyn_group_w) + (x % dyn_group_w);
-					pixelData[(yA*width) + xA] = outputChunks[i - 1].px[a];
-					
+				for (int a = 0, x = (dyn_group_w + SAFE_PX)*(SAFE_PX / 2) + (SAFE_PX/2); a < dyn_group_h*dyn_group_w; x++, a++){
+					if (x % (dyn_group_w + SAFE_PX) == 0 || x % (dyn_group_w + SAFE_PX) == dyn_group_w + (SAFE_PX / 2) - 1) x += SAFE_PX;
+					int yA = ((outputChunks[i - 1].id / width_parts)*dyn_group_h) + (a / dyn_group_w);
+					int xA = ((outputChunks[i - 1].id % width_parts)*dyn_group_w) + (a % dyn_group_w);
+					//DBGLOG4("(x=%d, xA=%d, yA=%d, a=%d) \n ", x, xA, yA, a);
+					pixelData[(yA*width) + xA] = outputChunks[i - 1].px[x];
+					//if (x==50) getchar();
 				}
 			}
 			checkpointed_chunks = chunk_id;
